@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Hotel database missing · HART Admin Agent{% endblock %}
+
+{% block content %}
+<div class="card narrow">
+  <h1>Hotel database not found</h1>
+  <p>The platform reads hotel details from <code>hotel_info.db</code>, but it doesn't exist yet:</p>
+  <p><code>{{ path }}</code></p>
+  <p>Create it from the project root:</p>
+  <pre>python database/seed_main_db.py</pre>
+</div>
+{% endblock %}

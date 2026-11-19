@@ -1,0 +1,70 @@
+:root {
+  --bg: #f6f7fb; --surface: #fff; --text: #1d2433; --muted: #6b7385;
+  --border: #e3e6ee; --primary: #3654d1; --primary-text: #fff;
+  --ok-bg: #e5f6ec; --ok: #18794e; --err-bg: #fdecec; --err: #c0392b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+a { color: var(--primary); text-decoration: none; }
+h1 { margin: 0 0 .5rem; font-size: 1.6rem; }
+h2 { font-size: 1.05rem; margin: 1.5rem 0 .75rem; color: var(--muted); }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: .75rem 1.5rem; background: var(--surface); border-bottom: 1px solid var(--border); }
+.brand { font-weight: 700; color: var(--text); font-size: 1.1rem; }
+.brand span { color: var(--primary); font-weight: 500; }
+.topbar nav { display: flex; gap: 1rem; align-items: center; }
+.muted { color: var(--muted); }
+
+.container { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+.narrow { max-width: 420px; margin: 2rem auto; }
+.inline { display: inline; margin: 0; }
+
+.btn { display: inline-block; background: var(--primary); color: var(--primary-text); border: 1px solid var(--primary); border-radius: 8px; padding: .5rem 1rem; font: inherit; cursor: pointer; }
+.btn-ghost { background: transparent; color: var(--primary); }
+.btn-lg { padding: .75rem 1.5rem; font-size: 1.05rem; }
+
+.flash { padding: .75rem 1rem; border-radius: 8px; margin-bottom: 1rem; }
+.flash-success { background: var(--ok-bg); color: var(--ok); }
+.flash-error { background: var(--err-bg); color: var(--err); }
+
+.hero { text-align: center; padding: 3rem 1rem; }
+.hero h1 { font-size: 2.2rem; }
+.hero p { max-width: 600px; margin: 0 auto 1.5rem; color: var(--muted); }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+
+.page-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; gap: 1rem; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+.stat span { color: var(--muted); font-size: .9rem; display: block; }
+.stat strong { font-size: 1.8rem; }
+
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .75rem 1rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+tr:last-child td { border-bottom: 0; }
+.actions { text-align: right; }
+.badge { padding: .15rem .6rem; border-radius: 999px; font-size: .8rem; }
+.badge-active { background: var(--ok-bg); color: var(--ok); }
+.badge-inactive { background: #eef0f4; color: var(--muted); }
+.empty { text-align: center; color: var(--muted); }
+
+.form label { display: block; font-weight: 500; margin-bottom: 1rem; }
+.form input, .form textarea { display: block; width: 100%; margin-top: .3rem; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 8px; font: inherit; }
+.form .has-error input, .form .has-error textarea { border-color: var(--err); }
+.error { color: var(--err); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 1rem; }
+
+@media (max-width: 600px) { .stats { grid-template-columns: 1fr; } }
+
+.form select { display: block; width: 100%; margin-top: .3rem; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: var(--surface); }
+.form .has-error select { border-color: var(--err); }
+.readonly { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.5rem; margin: 0 0 .5rem; }
+.readonly dt { color: var(--muted); }
+.readonly dd { margin: 0; }
+code, pre { background: #eef0f4; border-radius: 6px; padding: .1rem .4rem; font-size: .9em; }
+pre { padding: .75rem 1rem; overflow-x: auto; }
+.activity { list-style: none; margin: 0; padding: 0; }
+.activity li { padding: .45rem 0; border-bottom: 1px solid var(--border); }
+.activity li:last-child { border-bottom: 0; }
+.activity .muted { font-size: .85rem; margin-right: .5rem; }

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · HART Admin Agent{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Hotel agents</h1>
+  <a class="btn" href="{{ url_for('admin.agent_new') }}">+ Add hotel agent</a>
+</div>
+
+<div class="stats">
+  <div class="card stat"><span>Total agents</span><strong>{{ counts.total }}</strong></div>
+  <div class="card stat"><span>Active</span><strong>{{ counts.active }}</strong></div>
+  <div class="card stat"><span>Inactive</span><strong>{{ counts.inactive }}</strong></div>
+</div>
+
+{% if rows %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Hotel</th><th>City</th><th>Agent</th><th>Check-in / out</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% set agent, hotel = row.agent, row.hotel %}
+      <tr>
+        {% if hotel %}
+          <td><strong>{{ hotel.name }}</strong></td>
+          <td>{{ hotel.city }}</td>
+        {% else %}
+          <td colspan="2" class="error">Hotel #{{ agent.hotel_id }} not found in hotel_info.db</td>
+        {% endif %}
+        <td>{{ agent.agent_name }}</td>
+        <td>{{ hotel.check_in_time ~ " / " ~ hotel.check_out_time if hotel else "—" }}</td>
+        <td><span class="badge badge-{{ agent.status }}">{{ agent.status }}</span></td>
+        <td class="actions">
+          <a class="btn btn-ghost" href="{{ url_for('admin.agent_edit', agent_id=agent.id) }}">Edit</a>
+          <form method="post" action="{{ url_for('admin.agent_toggle_status', agent_id=agent.id) }}" class="inline">
+            <button type="submit" class="btn btn-ghost">
+              {{ "Deactivate" if agent.status == "active" else "Activate" }}
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">No hotel agents yet. Click <strong>+ Add hotel agent</strong> to configure the first one.</div>
+{% endif %}
+
+<h2>Recent activity</h2>
+{% if activity %}
+<div class="card">
+  <ul class="activity">
+    {% for item in activity %}
+    <li>
+      <span class="muted">{{ item.created_at }}</span>
+      <strong>{{ item.user_name or "System" }}</strong>
+      {{ item.action.replace("_", " ") }}{% if item.details %}: {{ item.details }}{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% else %}
+<div class="card empty">No activity yet.</div>
+{% endif %}
+{% endblock %}

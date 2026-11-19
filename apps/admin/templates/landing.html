@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1>One platform for every hotel's AI agent</h1>
+  <p>Configure an AI assistant for each hotel, keep each hotel's information separate,
+     and preview how each agent responds before it goes live.</p>
+  <a class="btn btn-lg" href="{{ url_for('admin.login') }}">Login to the platform</a>
+</section>
+
+<section class="features">
+  <div class="card"><h3>Configure</h3><p>Hotel details, timings, policies and the agent's personality.</p></div>
+  <div class="card"><h3>Isolate</h3><p>Every hotel agent sees only its own hotel's data.</p></div>
+  <div class="card"><h3>Preview</h3><p>Chat with any hotel agent before guests do.</p></div>
+</section>
+{% endblock %}

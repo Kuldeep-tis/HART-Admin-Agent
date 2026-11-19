@@ -1,0 +1,505 @@
+Absolutely. And I want to change how we approach this project based on what you said.
+
+**Our goal is not to finish HART Admin Agent as quickly as possible. Our goal is to build it while you understand how every important part works.**
+
+I will treat this as a practical learning project. We will write code step by step, understand why we are writing it, run it, test it, and then move forward.
+
+# **HART Admin Agent — Software Requirements Specification (SRS)**
+
+# **HART Admin Agent**
+
+Learning-focused project
+
+**Project type:** Multi-tenant AI hotel operations agent
+
+**Primary technology:** Python, Flask, Gemini, LangGraph, SQL database
+
+**Application:** Web-based hotel admin dashboard with an AI assistant.
+
+**Development approach:** Incremental, step-by-step learning.
+
+## **1. Project overview**
+
+HART Admin Agent is an AI assistant integrated into the hotel SaaS platform.
+
+Each registered hotel has its own data in the database, including:
+
+- Hotel information
+- Check-in and check-out timings
+- Hotel policies
+- Rooms and room types
+- Bookings and reservations
+- Guest information
+- Revenue and operational information
+
+Hotel owners and administrators can communicate with the AI agent through a dashboard.
+
+The agent understands their questions and retrieves the correct information from the database.
+
+**Example:**
+
+Hotel A has a check-in time of 12 PM.
+
+Hotel B has a check-in time of 2 PM.
+
+Both administrators ask:
+
+"What is our check-in time?"
+
+The same AI agent answers differently because it retrieves information for the authenticated administrator's hotel.
+
+## **2. Main objectives**
+
+1. Build a single AI agent that supports multiple hotels.
+2. Connect the agent to real hotel database information.
+3. Allow administrators to ask questions in natural language.
+4. Allow the agent to analyze hotel bookings and business data.
+5. Introduce agent tools and multi-step reasoning.
+6. Eventually allow the agent to perform approved hotel operations.
+7. Learn how production-oriented AI agents are designed and developed.
+
+## **3. Users and roles**
+
+| User         | Responsibilities                                         |
+| ------------ | -------------------------------------------------------- |
+| Hotel Owner  | View hotel information, analytics and operations         |
+| Hotel Admin  | Ask questions and manage authorized hotel operations     |
+| System Admin | Manage platform-level agent configuration and monitoring |
+
+The system must ensure that a hotel administrator cannot access another hotel's information.
+
+## **4. Functional requirements**
+
+### **FR-01: Landing page**
+
+- Application landing page at `/`.
+- Display project information.
+- Provide login access.
+
+### **FR-02: Admin authentication**
+
+- Secure login.
+- Identify the authenticated user.
+- Retrieve their associated `hotel_id`.
+- Restrict access based on role and permissions.
+
+### **FR-03: Admin dashboard**
+
+- Hotel overview.
+- AI assistant chat interface.
+- Recent conversations.
+- Hotel statistics.
+- Agent activity information.
+
+### **FR-04: AI chat**
+
+Administrators should be able to ask questions such as:
+
+- What are our check-in and check-out times?
+- What is our cancellation policy?
+- How many rooms are available?
+- How many bookings do we have this month?
+- What is our occupancy rate?
+- Which bookings are cancelled?
+
+### **FR-05: Database-connected AI agent**
+
+- Retrieve hotel-specific information dynamically.
+- Use database tools to fetch relevant records.
+- Avoid sending unnecessary database information to Gemini.
+- Never invent hotel information when records are missing.
+- Ensure every query is restricted to the authenticated hotel.
+
+### **FR-06: Hotel analytics**
+
+The agent should eventually answer questions about:
+
+- Booking trends.
+- Occupancy.
+- Revenue.
+- Cancellations.
+- Room performance.
+- Guest feedback.
+
+### **FR-07: Hotel operations**
+
+Future versions can support:
+
+- Creating bookings.
+- Modifying bookings.
+- Cancelling bookings.
+- Updating room availability.
+- Updating prices.
+
+Sensitive actions must require authorization and confirmation.
+
+### **FR-08: Conversation management**
+
+- Maintain conversation history.
+- Keep conversations separate by user and hotel.
+- Support follow-up questions.
+- Avoid sharing memory across hotels.
+
+## **5. Non-functional requirements**
+
+| Requirement      | Description                              |
+| ---------------- | ---------------------------------------- |
+| Security         | Authentication and authorization         |
+| Tenant isolation | No cross-hotel data access               |
+| Accuracy         | Answers grounded in database information |
+| Scalability      | One agent serving multiple hotels        |
+| Maintainability  | Separate UI, agent, tools and services   |
+| Reliability      | Handle database and LLM errors           |
+| Observability    | Log agent activity and tool execution    |
+
+## **6. Proposed project structure**
+
+This is our starting structure. We will create folders gradually rather than creating everything on day one.
+
+```
+HART-Admin-Agent/
+│
+├── app.py
+├── config.py
+├── requirements.txt
+├── .env
+├── README.md
+│
+├── apps/
+│   ├── __init__.py
+│   │
+│   ├── admin/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   ├── controllers.py
+│   │   │
+│   │   ├── templates/
+│   │   │   ├── base.html
+│   │   │   ├── landing.html
+│   │   │   ├── login.html
+│   │   │   ├── dashboard.html
+│   │   │   └── chat.html
+│   │   │
+│   │   └── static/
+│   │       ├── css/
+│   │       ├── js/
+│   │       └── images/
+│   │
+│   └── core/
+│       ├── __init__.py
+│       ├── agent.py
+│       ├── graph.py
+│       ├── state.py
+│       ├── prompts.py
+│       │
+│       ├── tools/
+│       │   ├── hotel_tools.py
+│       │   ├── booking_tools.py
+│       │   ├── revenue_tools.py
+│       │   └── operations_tools.py
+│       │
+│       └── services/
+│           ├── hotel_service.py
+│           ├── booking_service.py
+│           └── analytics_service.py
+│
+├── helpers/
+│   ├── __init__.py
+│   ├── database.py
+│   ├── auth.py
+│   ├── seed_data.py
+│   └── logger.py
+│
+├── database/
+│   └── migrations/
+│
+└── tests/
+    ├── test_agent.py
+    ├── test_tools.py
+    └── test_hotel_isolation.py
+```
+
+# **7. Step-by-step development and learning roadmap**
+
+This is the most important part of the project.
+
+We will divide development into phases. Each phase has a coding goal and a learning goal.
+
+## **Phase 1 — Foundation**
+
+Start here
+
+**Goal:** Understand the application structure and how Flask works.
+
+Tasks:
+
+1. Create the project folder.
+2. Create a Python virtual environment.
+3. Install Flask.
+4. Create `app.py`.
+5. Create the admin application folder.
+6. Configure Flask templates.
+7. Build the landing page at `/`.
+8. Create a basic `/admin` route.
+
+**What you will learn:**
+
+- What Flask is.
+- What a Flask application does.
+- What routes are.
+- How request and response work.
+- What templates are.
+- How Python imports work.
+- Why we use separate folders and modules.
+
+**Deliverable:** A running website with landing and admin pages.
+
+## **Phase 2 — Database fundamentals**
+
+**Goal:** Understand how hotel data is stored and retrieved.
+
+Tasks:
+
+1. Understand the hotel database schema.
+2. Connect Python to the database.
+3. Create hotel-related models or queries.
+4. Create sample hotel data using `seed_data.py`.
+5. Fetch hotel information using Python.
+6. Fetch information using a `hotel_id`.
+
+**What you will learn:**
+
+- SQL and database connections.
+- Tables, rows and relationships.
+- Primary and foreign keys.
+- CRUD operations.
+- Multi-tenant database design.
+
+**Deliverable:** Python can retrieve the correct hotel's information.
+
+## **Phase 3 — Authentication and tenant isolation**
+
+**Goal:** Understand how the application knows which hotel is logged in.
+
+Tasks:
+
+1. Build a login page.
+2. Implement authentication.
+3. Create a user-to-hotel relationship.
+4. Store authenticated user information securely.
+5. Retrieve `hotel_id` from the authenticated session.
+6. Protect admin routes.
+7. Test access restrictions between hotels.
+
+**What you will learn:**
+
+- Authentication versus authorization.
+- Sessions and cookies.
+- Password hashing.
+- Role-based access control.
+- Tenant isolation.
+
+**Deliverable:** Hotel A and Hotel B administrators see only their own data.
+
+## **Phase 4 — First AI integration**
+
+**Goal:** Connect Gemini to our Flask application.
+
+Tasks:
+
+1. Understand LLMs and API requests.
+2. Configure Gemini API access.
+3. Send a message to Gemini.
+4. Receive and display its response.
+5. Build the chat interface.
+6. Handle errors and API failures.
+
+**What you will learn:**
+
+- How LLM APIs work.
+- System prompts and user messages.
+- Tokens and context windows.
+- Temperature and model settings.
+- Backend-to-LLM communication.
+
+**Deliverable:** A working AI chat interface.
+
+## **Phase 5 — Database-connected agent**
+
+**Goal:** Make the AI agent answer using actual hotel records.
+
+Tasks:
+
+1. Understand tool/function calling.
+2. Create `hotel_tools.py`.
+3. Create a tool to fetch hotel policies.
+4. Connect Gemini function calling.
+5. Understand how the model selects a tool.
+6. Execute the tool in Python.
+7. Return tool results to Gemini.
+8. Test with two different hotels.
+
+**What you will learn:**
+
+- AI tool calling.
+- Tool schemas.
+- Agent versus chatbot.
+- Database-grounded answers.
+- Backend validation.
+- Multi-tenant tool security.
+
+**Deliverable:** The agent answers hotel-specific questions correctly.
+
+## **Phase 6 — LangGraph and agent workflows**
+
+**Goal:** Move beyond basic function calling.
+
+Tasks:
+
+1. Understand what LangGraph is.
+2. Learn nodes, edges and state.
+3. Create an agent state.
+4. Build a simple graph.
+5. Add tool execution nodes.
+6. Add conditional routing.
+7. Implement error handling.
+8. Add conversation memory.
+
+**What you will learn:**
+
+- Stateful AI workflows.
+- Graph-based orchestration.
+- Conditional execution.
+- Agent loops.
+- Checkpointing.
+- Human-in-the-loop workflows.
+
+**Deliverable:** A structured AI agent capable of multi-step tasks.
+
+## **Phase 7 — Hotel intelligence**
+
+**Goal:** Make the agent useful for business decisions.
+
+Tasks:
+
+1. Create booking analytics tools.
+2. Calculate occupancy.
+3. Calculate revenue.
+4. Analyze cancellations.
+5. Answer questions involving multiple datasets.
+6. Build dashboard insights.
+
+**What you will learn:**
+
+- Data analysis.
+- SQL aggregation.
+- Business metrics.
+- Multi-tool agent workflows.
+- Data interpretation.
+
+**Deliverable:** An AI hotel business analyst.
+
+## **Phase 8 — Controlled actions**
+
+**Goal:** Let the agent perform authorized operations.
+
+Tasks:
+
+1. Build a booking creation tool.
+2. Build a booking modification tool.
+3. Add confirmation before execution.
+4. Validate permissions.
+5. Add audit logs.
+6. Test failure and rollback scenarios.
+
+**What you will learn:**
+
+- AI agents that take actions.
+- Human approval.
+- Transaction management.
+- Idempotency.
+- Audit logging.
+- Safe tool execution.
+
+**Deliverable:** An agent that can safely execute approved hotel operations.
+
+## **8. What you should understand before moving to the next phase**
+
+We will not move forward just because the code runs.
+
+For each phase, I will follow this teaching pattern:
+
+1. **Concept first**
+
+   I explain what we are going to build and why it is needed.
+2. **Architecture**
+
+   I explain which files are involved and how they communicate.
+3. **Code together**
+
+   We write small pieces of code, not hundreds of lines at once.
+4. **Line-by-line explanation**
+
+   I explain important imports, functions, parameters and logic.
+5. **Run and test**
+
+   You execute the code and understand the output.
+6. **Your practice task**
+
+   I give you a small task to implement yourself.
+7. **Review**
+
+   We review your implementation and clear doubts before proceeding.
+
+# **9. Learning targets**
+
+By the end, you should understand these concepts rather than simply having a working application.
+
+| Area        | Concepts you should understand                     |
+| ----------- | -------------------------------------------------- |
+| Python      | Modules, imports, functions, classes, async basics |
+| Flask       | Routes, blueprints, templates, sessions            |
+| Database    | SQL, relationships, transactions                   |
+| Security    | Authentication, permissions, tenant isolation      |
+| Gemini      | Prompts, API calls, function calling               |
+| Agents      | Tools, state, reasoning, workflows                 |
+| LangGraph   | Nodes, edges, state, checkpoints                   |
+| Advanced AI | Memory, human approval, multi-step execution       |
+| Production  | Logging, testing, error handling, monitoring       |
+
+# **10. Our first development session**
+
+Phase 1 · Step 1
+
+I suggest we start with the absolute foundation.
+
+**First, understand the Flask application structure.**
+
+We will create only these files initially:
+
+```
+HART-Admin-Agent/
+│
+├── app.py
+│
+├── apps/
+│   ├── __init__.py
+│   └── admin/
+│       ├── __init__.py
+│       ├── routes.py
+│       └── templates/
+│           └── landing.html
+│
+└── requirements.txt
+```
+
+Our first target will be:
+
+- Run the Flask server.
+- Open `http://127.0.0.1:5000/`.
+- Display a landing page.
+- Understand exactly how the request reaches `app.py`, then the route, then the HTML template.
+
+**Before we start, one technical decision:** I recommend Flask for this learning project because your existing HART work already uses Flask. We can learn the agent concepts without introducing a new web framework at the same time.
+
+We will not build the whole project in one response. We will build it together, one small step at a time.
