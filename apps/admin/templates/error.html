@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · {{ title }} · HART Admin Agent{% endblock %}
+
+{% block content %}
+<div class="panel empty-state error-page">
+  <span class="kpi-icon tone-{{ 'amber' if code < 500 else 'red' }}">{{ ui.icon("alert", 24) }}</span>
+  <span class="error-code">{{ code }}</span>
+  <h3>{{ title }}</h3>
+  <p>{{ message }}</p>
+  <a class="btn" href="{{ url_for('admin.dashboard') if g.user else url_for('admin.landing') }}">{{ ui.icon("back", 16) }} Go back home</a>
+</div>
+{% endblock %}

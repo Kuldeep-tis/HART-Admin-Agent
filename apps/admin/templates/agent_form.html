@@ -1,57 +1,52 @@
 {% extends "base.html" %}
-{% set heading = "Add hotel agent" if mode == "new" else "Edit agent " ~ agent.agent_name %}
-{% block title %}{{ heading }} · HART Admin Agent{% endblock %}
+{% block title %}Add hotel agent · HART Admin Agent{% endblock %}
 
 {% block content %}
+<a class="back-link" href="{{ url_for('admin.dashboard') }}">{{ ui.icon("back", 16) }} All agents</a>
 <div class="page-head">
-  <h1>{{ heading }}</h1>
-  <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">Cancel</a>
+  <div>
+    <h1>Add hotel agent</h1>
+    <p class="subtitle">Pick a hotel from the hotel database, then set up its AI agent.</p>
+  </div>
 </div>
 
-{% if errors %}<div class="flash flash-error">Please fix the highlighted fields.</div>{% endif %}
-
-{% if mode == "new" and not hotels %}
-  <div class="card empty">
-    Every hotel in <code>hotel_info.db</code> already has an agent.
-    Add hotels to the hotel database (<code>database/seed_main_db.py</code>) to configure more.
+{% if not hotels %}
+  <div class="panel empty-state">
+    <span class="kpi-icon tone-amber">{{ ui.icon("building", 24) }}</span>
+    <h3>Every hotel already has an agent</h3>
+    <p>Add hotels to <code>hotel_info.db</code> (via <code>database/seed_main_db.py</code>) to configure more.</p>
   </div>
 {% else %}
-<form method="post" class="card form" novalidate>
-  <h2>Hotel</h2>
-  {% if mode == "new" %}
-    <label class="{{ 'has-error' if errors.get('hotel_id') }}">Hotel (from hotel_info.db) *
+<form method="post" class="panel form narrow-form" novalidate><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="panel-head"><h2>{{ ui.icon("building", 16) }} Hotel</h2>{{ ui.source_badge("hotel") }}</div>
+  <div class="panel-body">
+    <label class="{{ 'has-error' if errors.get('hotel_id') }}">Hotel *
       <select name="hotel_id" required>
         <option value="">Select a hotel…</option>
         {% for h in hotels %}
-          <option value="{{ h.id }}" {{ "selected" if values.get("hotel_id") == h.id }}>
-            {{ h.name }} · {{ h.city }}
-          </option>
+          <option value="{{ h.id }}" {{ "selected" if values.get("hotel_id") == h.id }}>{{ h.name }} · {{ h.city }}</option>
         {% endfor %}
       </select>
-      {% if errors.get("hotel_id") %}<small class="error">{{ errors.hotel_id }}</small>{% endif %}
+      {% if errors.get("hotel_id") %}<small class="error">{{ errors.hotel_id }}</small>
+      {% else %}<small class="hint">Only hotels without an agent are listed.</small>{% endif %}
     </label>
-  {% elif hotel %}
-    <dl class="readonly">
-      <dt>Name</dt><dd>{{ hotel.name }}</dd>
-      <dt>City</dt><dd>{{ hotel.city }}</dd>
-      <dt>Check-in / out</dt><dd>{{ hotel.check_in_time }} / {{ hotel.check_out_time }}</dd>
-    </dl>
-    <p class="muted">Hotel details come from <code>hotel_info.db</code> and are read-only here.</p>
-  {% else %}
-    <p class="error">Hotel #{{ agent.hotel_id }} not found in hotel_info.db.</p>
-  {% endif %}
+  </div>
 
-  <h2>Agent</h2>
-  <label class="{{ 'has-error' if errors.get('agent_name') }}">Agent name *
-    <input type="text" name="agent_name" value="{{ values.get('agent_name') or '' }}" placeholder="e.g. Aria" required>
-    {% if errors.get("agent_name") %}<small class="error">{{ errors.agent_name }}</small>{% endif %}
-  </label>
-  <label class="{{ 'has-error' if errors.get('greeting') }}">Greeting message
-    <textarea name="greeting" rows="3" placeholder="First message shown in the chat">{{ values.get('greeting') or '' }}</textarea>
-    {% if errors.get("greeting") %}<small class="error">{{ errors.greeting }}</small>{% endif %}
-  </label>
-
-  <button type="submit" class="btn">{{ "Create agent" if mode == "new" else "Save changes" }}</button>
+  <div class="panel-head panel-head-split"><h2>{{ ui.icon("bot", 16) }} Agent</h2>{{ ui.source_badge("platform") }}</div>
+  <div class="panel-body">
+    <label class="{{ 'has-error' if errors.get('agent_name') }}">Agent name *
+      <input type="text" name="agent_name" value="{{ values.get('agent_name') or '' }}" maxlength="60" placeholder="e.g. Aria" required>
+      {% if errors.get("agent_name") %}<small class="error">{{ errors.agent_name }}</small>{% endif %}
+    </label>
+    <label class="{{ 'has-error' if errors.get('greeting') }}">Greeting message
+      <textarea name="greeting" rows="3" maxlength="500" placeholder="First message guests see in the chat">{{ values.get('greeting') or '' }}</textarea>
+      {% if errors.get("greeting") %}<small class="error">{{ errors.greeting }}</small>{% endif %}
+    </label>
+    <div class="form-actions">
+      <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">Cancel</a>
+      <button type="submit" class="btn">{{ ui.icon("plus", 16) }} Create agent</button>
+    </div>
+  </div>
 </form>
 {% endif %}
 {% endblock %}

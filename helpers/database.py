@@ -52,12 +52,30 @@ def close_dbs(exc=None):
             conn.close()
 
 
+# Columns added after the first release. "CREATE TABLE IF NOT EXISTS" never changes
+# an existing table, so existing databases get these via ALTER TABLE instead.
+#   (table, column, column definition)
+ADDED_COLUMNS = [
+    ("agents", "admin_prompt", "TEXT"),
+    ("messages", "tool_calls", "TEXT"),
+]
+
+
+def _add_missing_columns(conn):
+    for table, column, definition in ADDED_COLUMNS:
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    conn.commit()
+
+
 def ensure_platform_schema(app):
-    """Create platform tables if they don't exist. Never deletes data."""
+    """Create platform tables if they don't exist, add new columns. Never deletes data."""
     path = Path(app.config["PLATFORM_DATABASE"])
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = _connect(path)
     conn.executescript(PLATFORM_SCHEMA.read_text())
+    _add_missing_columns(conn)
     conn.close()
 
 

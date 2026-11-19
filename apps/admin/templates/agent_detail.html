@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}{{ agent.agent_name }}{% if hotel %} · {{ hotel.name }}{% endif %} · HART Admin Agent{% endblock %}
+
+{% block content %}
+<a class="back-link" href="{{ url_for('admin.dashboard') }}">{{ ui.icon("back", 16) }} All agents</a>
+
+<div class="panel hero-panel">
+  <div class="hero-main">
+    <span class="avatar avatar-lg">{{ agent.agent_name | initials }}</span>
+    <div>
+      <h1>{{ agent.agent_name }}</h1>
+      <p class="subtitle">AI agent for <strong>{{ hotel.name if hotel else "Hotel #" ~ agent.hotel_id }}</strong></p>
+      {% if hotel %}
+      <div class="meta-row">
+        <span>{{ ui.icon("pin", 14) }} {{ hotel.city }}</span>
+        <span class="stars" aria-label="{{ hotel.star_rating }} star hotel">
+          {% for _ in range(hotel.star_rating or 0) %}{{ ui.icon("star", 14) }}{% endfor %}
+        </span>
+        <span>{{ ui.icon("clock", 14) }} In {{ hotel.check_in_time }} · Out {{ hotel.check_out_time }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="hero-actions">
+    {{ ui.status_switch(agent, return_to="detail") }}
+    <a class="btn" href="{{ url_for('admin.agent_preview', agent_id=agent.id) }}">{{ ui.icon("chat", 16) }} Preview chat</a>
+  </div>
+</div>
+
+{# ---------- Tabs ---------- #}
+<div class="tabs" data-tabs>
+  <div class="tab-list" role="tablist" aria-label="Agent sections">
+    <button type="button" role="tab" id="tab-agent" data-tab="agent" aria-controls="panel-agent" aria-selected="true">
+      {{ ui.icon("bot", 16) }} Agent {{ ui.source_badge("platform") }}
+    </button>
+    <button type="button" role="tab" id="tab-hotel" data-tab="hotel" aria-controls="panel-hotel" aria-selected="false" tabindex="-1">
+      {{ ui.icon("building", 16) }} Hotel data {{ ui.source_badge("hotel") }}
+    </button>
+    <button type="button" role="tab" id="tab-conversations" data-tab="conversations" aria-controls="panel-conversations" aria-selected="false" tabindex="-1">
+      {{ ui.icon("chat", 16) }} Conversations <span class="tab-count">{{ chat_stats.conversations }}</span>
+    </button>
+  </div>
+
+  {# ===== Tab 1: Agent (editable, platform DB) ===== #}
+  <section role="tabpanel" id="panel-agent" aria-labelledby="tab-agent" class="tab-panel">
+    <div class="source-banner source-banner-editable">
+      {{ ui.icon("edit", 16) }}
+      <span>These settings are stored in our platform database <code>HART_Admin_Agent.db</code>. You can change them here.</span>
+    </div>
+
+    <div class="agent-grid">
+      <div class="agent-main">
+      <form method="post" action="{{ url_for('admin.agent_update_settings', agent_id=agent.id) }}"
+            class="panel panel-editable form" novalidate
+            {% if not errors %}data-dirty-form{% endif %}><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="panel-head"><h2>{{ ui.icon("edit", 16) }} Agent settings</h2></div>
+        <div class="panel-body">
+          <label class="{{ 'has-error' if errors.get('agent_name') }}">Agent name *
+            <input type="text" name="agent_name" value="{{ values.get('agent_name') or '' }}" maxlength="60" required>
+            {% if errors.get("agent_name") %}<small class="error">{{ errors.agent_name }}</small>
+            {% else %}<small class="hint">The name guests see in the chat.</small>{% endif %}
+          </label>
+          <label class="{{ 'has-error' if errors.get('greeting') }}">Greeting message
+            <textarea name="greeting" rows="5" maxlength="500" placeholder="First message guests see in the chat">{{ values.get('greeting') or '' }}</textarea>
+            {% if errors.get("greeting") %}<small class="error">{{ errors.greeting }}</small>
+            {% else %}<small class="hint">Shown as the first message in the chat. Max 500 characters.</small>{% endif %}
+          </label>
+          <label class="{{ 'has-error' if errors.get('admin_prompt') }}">Custom instructions <span class="label-note">admin prompt</span>
+            <textarea name="admin_prompt" rows="6" maxlength="2000" placeholder="e.g. Always mention our rooftop restaurant. Reply in Hindi if the guest writes in Hindi. Keep a warm, formal tone.">{{ values.get('admin_prompt') or '' }}</textarea>
+            {% if errors.get("admin_prompt") %}<small class="error">{{ errors.admin_prompt }}</small>
+            {% else %}<small class="hint">Added to the AI's instructions for this agent. Hotel facts are included automatically, so you don't need to repeat them. Max 2000 characters.</small>{% endif %}
+          </label>
+          <div class="form-actions">
+            <button type="reset" class="btn btn-ghost" data-dirty-enable>Reset</button>
+            <button type="submit" class="btn" data-dirty-enable>Save changes</button>
+          </div>
+        </div>
+        <dl class="meta-list">
+          <dt>Status</dt><dd><span class="badge badge-{{ agent.status }}">{{ agent.status }}</span></dd>
+          <dt>Created by</dt><dd>{{ creator.name if creator else "—" }}</dd>
+          <dt>Created</dt><dd>{{ agent.created_at | localtime }}</dd>
+          <dt>Last updated</dt><dd title="{{ agent.updated_at | localtime }}">{{ agent.updated_at | timeago }}</dd>
+          <dt>Agent ID</dt><dd><code>{{ agent.id }}</code></dd>
+        </dl>
+      </form>
+      {% if system_prompt %}
+      <details class="panel prompt-panel">
+        <summary class="panel-head">
+          <h2>{{ ui.icon("bot", 16) }} What the AI sees</h2>
+          <span class="muted">system prompt · {{ system_prompt | length }} chars</span>
+        </summary>
+        <div class="panel-body">
+          <p class="hint">Built from our rules + today's date + your custom instructions. Updates after you save.</p>
+          <pre class="prompt-pre">{{ system_prompt }}</pre>
+          <h3 class="tools-title">{{ ui.icon("database", 14) }} Database tools the AI can call ({{ agent_tools | length }})</h3>
+          <p class="hint">No hotel data is in the prompt. The AI calls these tools when a question needs facts; each runs live SQL on <code>hotel_info.db</code>, always for this agent's hotel only.</p>
+          <ul class="tool-list">
+            {% for t in agent_tools %}
+            <li><code>{{ t.name }}({{ t.parameters.properties.keys() | join(", ") }})</code><span>{{ t.description }}</span></li>
+            {% endfor %}
+          </ul>
+        </div>
+      </details>
+      {% endif %}
+      </div>
+
+      <div class="panel activity-panel">
+        <div class="panel-head"><h2>{{ ui.icon("activity", 16) }} Agent activity</h2><span class="muted">{{ activity | length }}</span></div>
+        <div class="panel-body scroll-y">{{ ui.activity_feed(activity, "No activity for this agent yet.") }}</div>
+      </div>
+    </div>
+  </section>
+
+  {# ===== Tab 2: Hotel data (read-only, hotel DB) ===== #}
+  <section role="tabpanel" id="panel-hotel" aria-labelledby="tab-hotel" class="tab-panel" hidden>
+    <div class="source-banner source-banner-readonly">
+      {{ ui.icon("lock", 16) }}
+      <span>This data is fetched live from the hotel database <code>hotel_info.db</code>. It is read-only here.</span>
+    </div>
+
+    {% if not hotel %}
+      <div class="alert alert-error">{{ ui.icon("alert") }} <span>Hotel #{{ agent.hotel_id }} no longer exists in hotel_info.db.</span></div>
+    {% else %}
+    <div class="kpis kpis-auto">
+      <div class="kpi"><span class="kpi-icon tone-blue">{{ ui.icon("calendar") }}</span>
+        <div><span class="kpi-label">Total bookings</span><strong>{{ stats.total }}</strong></div></div>
+      <div class="kpi"><span class="kpi-icon tone-violet">{{ ui.icon("clock") }}</span>
+        <div><span class="kpi-label">Upcoming</span><strong>{{ stats.upcoming }}</strong></div></div>
+      <div class="kpi"><span class="kpi-icon tone-green">{{ ui.icon("bed") }}</span>
+        <div><span class="kpi-label">In-house tonight</span><strong>{{ stats.in_house }}<small> / {{ stats.total_rooms }} · {{ stats.occupancy_pct }}%</small></strong></div></div>
+      <div class="kpi"><span class="kpi-icon tone-amber">{{ ui.icon("money") }}</span>
+        <div><span class="kpi-label">Booked revenue</span><strong>{{ stats.revenue | money }}</strong></div></div>
+      <div class="kpi"><span class="kpi-icon tone-red">{{ ui.icon("x") }}</span>
+        <div><span class="kpi-label">Cancelled</span><strong>{{ stats.cancelled }}<small> · {{ stats.cancel_pct }}%</small></strong></div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel panel-readonly">
+        <div class="panel-head"><h2>{{ ui.icon("building", 16) }} Hotel information</h2></div>
+        <dl class="details panel-body">
+          <dt>Name</dt><dd>{{ hotel.name }}</dd>
+          <dt>Address</dt><dd>{{ hotel.address or "—" }}</dd>
+          <dt>City</dt><dd>{{ hotel.city }}</dd>
+          <dt>Email</dt><dd>{% if hotel.email %}<a href="mailto:{{ hotel.email }}">{{ hotel.email }}</a>{% else %}—{% endif %}</dd>
+          <dt>Phone</dt><dd>{{ hotel.phone or "—" }}</dd>
+          <dt>Rating</dt><dd>{{ hotel.star_rating or "—" }} star</dd>
+          <dt>Check-in</dt><dd>{{ hotel.check_in_time }}</dd>
+          <dt>Check-out</dt><dd>{{ hotel.check_out_time }}</dd>
+          <dt>Hotel ID</dt><dd><code>{{ hotel.id }}</code></dd>
+        </dl>
+      </div>
+
+      <div class="panel panel-readonly">
+        <div class="panel-head"><h2>{{ ui.icon("shield", 16) }} Policies</h2></div>
+        <div class="panel-body">
+          {% if policies %}
+          <ul class="policy-list">
+            {% for p in policies %}
+            <li><span class="tag">{{ p.policy_type }}</span><p>{{ p.description }}</p></li>
+            {% endfor %}
+          </ul>
+          {% else %}<p class="empty-inline">No policies recorded.</p>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="panel panel-readonly">
+      <div class="panel-head"><h2>{{ ui.icon("bed", 16) }} Room types <span class="muted count">{{ stats.total_rooms }} rooms</span></h2></div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Room type</th><th class="right">Capacity</th><th class="right">Rooms</th><th class="right">Price / night</th><th class="right">Active bookings</th></tr></thead>
+          <tbody>
+            {% for rt in room_types %}
+            <tr>
+              <td class="cell-title">{{ rt.name }}</td>
+              <td class="right">{{ rt.capacity }} guests</td>
+              <td class="right">{{ rt.total_rooms }}</td>
+              <td class="right">{{ rt.base_price | money }}</td>
+              <td class="right">{{ rt.booking_count }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="empty-inline">No room types.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel panel-readonly">
+      <div class="panel-head"><h2>{{ ui.icon("calendar", 16) }} Recent bookings <span class="muted count">latest {{ bookings | length }} of {{ stats.total }}</span></h2></div>
+      <div class="table-wrap table-scroll" tabindex="0" aria-label="Recent bookings, scrollable">
+        <table class="table">
+          <thead><tr><th>#</th><th>Guest</th><th>Room</th><th>Stay</th><th class="right">Guests</th><th class="right">Amount</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for b in bookings %}
+            <tr>
+              <td class="muted">{{ b.id }}</td>
+              <td><span class="cell-title">{{ b.guest_name }}</span><span class="cell-sub">{{ b.guest_email }}</span></td>
+              <td class="nowrap">{{ b.room_type }}</td>
+              <td class="nowrap">{{ b.check_in_date | date_fmt }} → {{ b.check_out_date | date_fmt }}</td>
+              <td class="right">{{ b.num_guests }}</td>
+              <td class="right">{{ b.total_amount | money }}</td>
+              <td>{{ ui.booking_badge(b.status) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty-inline">No bookings yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  {# ===== Tab 3: Conversations (stored chats, platform DB) ===== #}
+  <section role="tabpanel" id="panel-conversations" aria-labelledby="tab-conversations" class="tab-panel" hidden>
+    <div class="source-banner source-banner-readonly">
+      {{ ui.icon("database", 16) }}
+      <span>Every chat with this agent is saved in <code>HART_Admin_Agent.db</code> (tables <code>conversations</code> and <code>messages</code>).</span>
+    </div>
+
+    <div class="kpis kpis-auto">
+      <div class="kpi"><span class="kpi-icon tone-blue">{{ ui.icon("chat") }}</span>
+        <div><span class="kpi-label">Conversations</span><strong>{{ chat_stats.conversations }}</strong></div></div>
+      <div class="kpi"><span class="kpi-icon tone-violet">{{ ui.icon("users") }}</span>
+        <div><span class="kpi-label">Guests</span><strong>{{ chat_stats.guests }}</strong></div></div>
+      <div class="kpi"><span class="kpi-icon tone-green">{{ ui.icon("send") }}</span>
+        <div><span class="kpi-label">Questions asked</span><strong>{{ chat_stats.questions or 0 }}</strong></div></div>
+      <div class="kpi"><span class="kpi-icon tone-amber">{{ ui.icon("clock") }}</span>
+        <div><span class="kpi-label">Avg. reply time</span><strong>{{ "%.1f s" % (chat_stats.avg_latency_ms / 1000) if chat_stats.avg_latency_ms else "—" }}</strong></div></div>
+      <div class="kpi"><span class="kpi-icon tone-gray">{{ ui.icon("activity") }}</span>
+        <div><span class="kpi-label">Tokens used</span><strong>{{ "{:,}".format(chat_stats.tokens) }}</strong></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>{{ ui.icon("chat", 16) }} Sessions <span class="muted count">latest {{ conversations | length }}</span></h2></div>
+      {% if conversations %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>First question</th><th>Session</th><th>Guest</th><th>Channel</th><th class="right">Messages</th><th>Last message</th><th class="right">View</th></tr></thead>
+          <tbody>
+            {% for c in conversations %}
+            <tr>
+              <td class="cell-question">
+                <a class="cell-title" href="{{ url_for('admin.conversation_detail', agent_id=agent.id, conversation_id=c.id) }}">
+                  {{ c.first_question or "No question yet" }}
+                </a>
+                <span class="cell-sub">started {{ c.started_at | timeago }}</span>
+              </td>
+              <td><code title="{{ c.session_id }}">{{ c.session_id[:8] }}</code></td>
+              <td><code title="{{ c.guest_public_id }}">{{ c.guest_public_id[:8] }}</code></td>
+              <td><span class="badge badge-channel-{{ c.channel }}">{{ c.channel }}</span></td>
+              <td class="right">{{ c.message_count }}</td>
+              <td class="nowrap" title="{{ c.last_message_at | localtime }}">{{ c.last_message_at | timeago }}</td>
+              <td class="right">
+                <a class="icon-btn" href="{{ url_for('admin.conversation_detail', agent_id=agent.id, conversation_id=c.id) }}" title="View transcript" aria-label="View transcript">{{ ui.icon("eye") }}</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <span class="kpi-icon tone-blue">{{ ui.icon("chat", 24) }}</span>
+        <h3>No conversations yet</h3>
+        <p>Open the preview and send a message. It will appear here.</p>
+        <a class="btn" href="{{ url_for('admin.agent_preview', agent_id=agent.id) }}">{{ ui.icon("chat", 16) }} Open preview chat</a>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

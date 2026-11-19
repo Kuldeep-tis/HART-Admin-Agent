@@ -18,6 +18,7 @@ SCHEMA_PATH = HERE / "hotel_info_schema.sql"
 
 HOTELS = [
     {
+        "id": 1,  # FIXED id: agents in HART_Admin_Agent.db refer to hotels by this id
         "name": "Grand Palace Hotel", "city": "Jaipur", "address": "12 MI Road, Jaipur",
         "email": "frontdesk@grandpalace.example", "phone": "+91 141 555 0101",
         "star_rating": 5, "check_in_time": "12:00", "check_out_time": "11:00",
@@ -30,6 +31,7 @@ HOTELS = [
         "room_types": [("Deluxe Room", 2, 6500, 40), ("Heritage Suite", 3, 14000, 10)],
     },
     {
+        "id": 2,  # FIXED id: agents in HART_Admin_Agent.db refer to hotels by this id
         "name": "Seaside Retreat", "city": "Goa", "address": "Calangute Beach Road, Goa",
         "email": "hello@seasideretreat.example", "phone": "+91 832 555 0202",
         "star_rating": 4, "check_in_time": "14:00", "check_out_time": "10:00",
@@ -41,6 +43,7 @@ HOTELS = [
         "room_types": [("Garden View", 2, 4500, 25), ("Sea View", 2, 7000, 15), ("Beach Villa", 4, 15000, 5)],
     },
     {
+        "id": 3,  # FIXED id: agents in HART_Admin_Agent.db refer to hotels by this id
         "name": "Mountain Lodge", "city": "Manali", "address": "Old Manali, Himachal Pradesh",
         "email": "stay@mountainlodge.example", "phone": "+91 1902 555 0303",
         "star_rating": 3, "check_in_time": "13:00", "check_out_time": "10:30",
@@ -89,12 +92,13 @@ def seed(db_path=DEFAULT_DB_PATH):
     conn.executescript(SCHEMA_PATH.read_text())
 
     for h in HOTELS:
-        hotel_id = conn.execute(
-            "INSERT INTO hotels (name, city, address, email, phone, star_rating, check_in_time, check_out_time)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (h["name"], h["city"], h["address"], h["email"], h["phone"],
+        hotel_id = h["id"]
+        conn.execute(
+            "INSERT INTO hotels (id, name, city, address, email, phone, star_rating, check_in_time, check_out_time)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (hotel_id, h["name"], h["city"], h["address"], h["email"], h["phone"],
              h["star_rating"], h["check_in_time"], h["check_out_time"]),
-        ).lastrowid
+        )
 
         conn.executemany(
             "INSERT INTO hotel_policies (hotel_id, policy_type, description) VALUES (?, ?, ?)",

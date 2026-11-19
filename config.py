@@ -1,16 +1,63 @@
 import os
+import secrets
+from datetime import timedelta
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = BASE_DIR / "database"
 
+# Read KEY=value lines from .env into environment variables (keeps secrets out of code).
+load_dotenv(BASE_DIR / ".env")
+
+APP_ENV = os.environ.get("APP_ENV", "development").lower()   # "development" or "production"
+IS_PRODUCTION = APP_ENV == "production"
+
+
+def _env_list(name, default):
+    return [x.strip() for x in os.environ.get(name, default).split(",") if x.strip()]
+
 
 class Config:
-    # Signs the session cookie. Override with a long random value outside development.
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-me")
+    APP_ENV = APP_ENV
+    DEBUG = not IS_PRODUCTION and os.environ.get("FLASK_DEBUG", "1") == "1"
+    LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
-    # Platform database: our own data (admins, agent configs, logs). Read + write.
+    # Signs the session cookie. Anyone who knows it can forge a login, so it must be
+    # secret and random. Production refuses to start without one (see app.create_app).
+    # Development falls back to a random per-process key (logins reset on restart).
+    SECRET_KEY = os.environ.get("SECRET_KEY") or None
+    if SECRET_KEY is None and not IS_PRODUCTION:
+        SECRET_KEY = secrets.token_hex(32)
+        SECRET_KEY_IS_TEMPORARY = True
+
+    # Session cookie: not readable by JavaScript, not sent on cross-site requests,
+    # HTTPS-only in production, and logins expire.
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = IS_PRODUCTION
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=int(os.environ.get("SESSION_HOURS", "8")))
+
+    MAX_CONTENT_LENGTH = 64 * 1024          # reject request bodies over 64 KB
+    TRUST_PROXY = os.environ.get("TRUST_PROXY", "0") == "1"   # set to 1 behind nginx / a load balancer
+
+    # Abuse limits (in memory, per server process)
+    LOGIN_MAX_FAILURES = int(os.environ.get("LOGIN_MAX_FAILURES", "5"))     # per IP + email ...
+    LOGIN_LOCKOUT_SECONDS = int(os.environ.get("LOGIN_LOCKOUT_SECONDS", "900"))  # ... per 15 minutes
+    CHAT_MAX_PER_MINUTE = int(os.environ.get("CHAT_MAX_PER_MINUTE", "20"))  # per admin
+
+    # Platform database: our own data (admins, agent configs, chats, logs). Read + write.
     PLATFORM_DATABASE = os.environ.get("PLATFORM_DATABASE", str(DB_DIR / "HART_Admin_Agent.db"))
 
     # Hotel database: the hotel system's data (hotels, rooms, bookings). Read-only for us.
     HOTEL_DATABASE = os.environ.get("HOTEL_DATABASE", str(DB_DIR / "hotel_info.db"))
+
+    # Gemini (the LLM behind every hotel agent)
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    # Tried in order when a model is busy (503), out of free quota (429) or retired (404).
+    GEMINI_FALLBACK_MODELS = _env_list(
+        "GEMINI_FALLBACK_MODELS",
+        "gemini-3.1-flash-lite,gemini-flash-lite-latest,gemini-2.5-flash,gemini-3-flash-preview",
+    )

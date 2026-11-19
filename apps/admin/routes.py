@@ -1,13 +1,21 @@
+import json
+import time
+
 from flask import (
-    Blueprint, abort, flash, g, redirect, render_template, request, session, url_for,
+    Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, session, url_for,
 )
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from apps.admin import filters
 from apps.admin.forms import validate_agent_form
-from apps.core.services import agent_service, hotel_service, log_service, user_service
-from helpers.auth import login_required
+from apps.core import agent as hotel_agent
+from apps.core import tools as hotel_tools
+from apps.core.services import (
+    agent_service, conversation_service, hotel_service, log_service, user_service,
+)
+from helpers.auth import platform_admin_required
 from helpers.database import HotelDatabaseMissing
+from helpers.security import wants_json
 
 admin_bp = Blueprint(
     "admin",
@@ -17,6 +25,9 @@ admin_bp = Blueprint(
     static_url_path="/admin-static",
 )
 filters.register(admin_bp)
+
+# Used to keep login timing the same for unknown emails (see login()).
+_DUMMY_HASH = generate_password_hash("not-a-real-password")
 
 
 @admin_bp.before_app_request
@@ -28,6 +39,8 @@ def load_logged_in_user():
 
 @admin_bp.app_errorhandler(HotelDatabaseMissing)
 def hotel_db_missing(error):
+    if wants_json():
+        return jsonify(error="The hotel database is not available."), 503
     return render_template("hotel_db_missing.html", path=str(error)), 503
 
 
@@ -51,15 +64,27 @@ def login():
 
     email = ""
     if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
+        email = request.form.get("email", "").strip().lower()[:254]
         password = request.form.get("password", "")
-        user = user_service.get_user_by_email(email)
+        limiter = current_app.extensions["login_limiter"]
+        limit_key = f"{request.remote_addr}|{email}"
 
-        # Same message for both cases, so attackers can't learn which emails exist.
-        if user is None or not check_password_hash(user["password_hash"], password):
+        if limiter.is_limited(limit_key):
+            current_app.logger.warning("Login locked out for %s", limit_key)
+            flash("Too many failed attempts. Please wait 15 minutes and try again.", "error")
+            return render_template("login.html", email=email), 429
+
+        user = user_service.get_user_by_email(email)
+        # Always run one password hash check, even for unknown emails, so the response
+        # time doesn't reveal which emails exist. Same message for both cases.
+        password_ok = check_password_hash(user["password_hash"] if user else _DUMMY_HASH, password)
+        if user is None or not password_ok:
+            limiter.hit(limit_key)
             flash("Invalid email or password.", "error")
         else:
-            session.clear()
+            limiter.reset(limit_key)
+            session.clear()             # new session on login (prevents session fixation)
+            session.permanent = True    # expires after PERMANENT_SESSION_LIFETIME
             session["user_id"] = user["id"]
             log_service.log("login", user_id=user["id"])
             flash(f"Welcome back, {user['name']}!", "success")
@@ -80,7 +105,7 @@ def logout():
 # ---------- Dashboard + agents ----------
 
 @admin_bp.route("/dashboard")
-@login_required
+@platform_admin_required
 def dashboard():
     counts = agent_service.status_counts()
     counts["unconfigured"] = len(agent_service.unconfigured_hotels())
@@ -88,24 +113,37 @@ def dashboard():
         "dashboard.html",
         rows=agent_service.list_agents_with_hotels(),
         counts=counts,
-        activity=log_service.recent(15),
+        activity=log_service.recent(50),
     )
 
 
-@admin_bp.route("/dashboard/<int:agent_id>/")
-@login_required
-def agent_detail(agent_id):
+def _get_agent_or_404(agent_id):
     agent = agent_service.get_agent(agent_id)
     if agent is None:
         abort(404)
+    return agent
 
+
+def _render_agent_detail(agent, values=None, errors=None):
+    """Build the detail page. Used by the page itself and when a settings save fails."""
     hotel = hotel_service.get_hotel(agent["hotel_id"])
     context = {
         "agent": agent,
         "hotel": hotel,
         "creator": user_service.get_user_by_id(agent["created_by"]) if agent["created_by"] else None,
-        "activity": log_service.for_agent(agent_id),
+        "activity": log_service.for_agent(agent["id"]),
+        "conversations": conversation_service.list_for_agent(agent["id"]),
+        "chat_stats": conversation_service.stats_for_agent(agent["id"]),
+        # Editable settings form: saved values, or what the user typed if validation failed.
+        "values": values if values is not None else dict(agent),
+        "errors": errors or {},
     }
+    # Exactly what Gemini will read, so the admin can check it.
+    try:
+        context["system_prompt"] = hotel_agent.system_prompt_for(agent)
+        context["agent_tools"] = list(hotel_tools.TOOLS.values())
+    except hotel_agent.AgentError:
+        context["system_prompt"] = None
     if hotel:
         context.update(
             policies=hotel_service.get_policies(hotel["id"]),
@@ -116,8 +154,134 @@ def agent_detail(agent_id):
     return render_template("agent_detail.html", **context)
 
 
+@admin_bp.route("/dashboard/<int:agent_id>/")
+@platform_admin_required
+def agent_detail(agent_id):
+    return _render_agent_detail(_get_agent_or_404(agent_id))
+
+
+# ---------- Preview chat ----------
+
+MAX_MESSAGE_LENGTH = 1000
+MAX_HISTORY_TURNS = 20
+
+
+@admin_bp.route("/dashboard/<int:agent_id>/preview/")
+@platform_admin_required
+def agent_preview(agent_id):
+    agent = _get_agent_or_404(agent_id)
+    hotel = hotel_service.get_hotel(agent["hotel_id"])
+    rooms = hotel_service.get_room_types(agent["hotel_id"]) if hotel else []
+    return render_template(
+        "preview.html", agent=agent, hotel=hotel, rooms=rooms,
+        greeting=hotel_agent.greeting_for(agent, hotel),
+    )
+
+
+@admin_bp.route("/dashboard/<int:agent_id>/preview/chat", methods=["POST"])
+@platform_admin_required
+def agent_preview_chat(agent_id):
+    """JSON API for the chat widget.
+
+    Request:  {message, session_id?, guest_id?}
+    Response: {reply, session_id, guest_id}   (or {error, session_id, guest_id})
+
+    The conversation history is read from the DATABASE, never from the browser.
+    """
+    agent = _get_agent_or_404(agent_id)
+    data = request.get_json(silent=True) or {}
+
+    if current_app.extensions["chat_limiter"].hit(f"user:{g.user['id']}"):
+        return jsonify(error="You're sending messages too quickly. Please wait a minute."), 429
+
+    message = str(data.get("message") or "").strip()
+    if not message:
+        return jsonify(error="Message cannot be empty."), 400
+    if len(message) > MAX_MESSAGE_LENGTH:
+        return jsonify(error=f"Keep messages under {MAX_MESSAGE_LENGTH} characters."), 400
+
+    # 1. Who is chatting (browser id) and which session (continue or start new).
+    guest = conversation_service.get_or_create_guest(data.get("guest_id"))
+    conversation = conversation_service.find_conversation(data.get("session_id"), agent_id, guest["id"])
+    if conversation is None:
+        hotel = hotel_service.get_hotel(agent["hotel_id"])
+        conversation = conversation_service.start_conversation(
+            agent, guest["id"], channel="preview", started_by=g.user["id"],
+            greeting=hotel_agent.greeting_for(agent, hotel),
+        )
+    ids = {"session_id": conversation["session_id"], "guest_id": guest["public_id"]}
+
+    # 2. Earlier turns from the DB, then store the new question.
+    history = conversation_service.get_history(conversation["id"], MAX_HISTORY_TURNS)
+    conversation_service.add_message(conversation["id"], "user", message)
+
+    # 3. Ask the agent and store the answer (or the failure).
+    started = time.perf_counter()
+    try:
+        reply = hotel_agent.respond(agent, message, history)
+    except hotel_agent.AgentError as exc:
+        conversation_service.add_message(
+            conversation["id"], "assistant", str(exc), status="error",
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        return jsonify(error=str(exc), **ids), 502
+
+    conversation_service.add_message(
+        conversation["id"], "assistant", reply.text, model=reply.model,
+        input_tokens=reply.input_tokens, output_tokens=reply.output_tokens,
+        latency_ms=int((time.perf_counter() - started) * 1000), tool_calls=reply.tool_calls,
+    )
+    used = [hotel_tools.TOOLS[c["name"]].label for c in reply.tool_calls if c["name"] in hotel_tools.TOOLS]
+    return jsonify(reply=reply.text, tools=list(dict.fromkeys(used)), **ids)
+
+
+def _tool_labels(tool_calls_json):
+    """Stored JSON -> unique human labels, e.g. ["Checked room availability"]."""
+    if not tool_calls_json:
+        return []
+    names = [c.get("name") for c in json.loads(tool_calls_json)]
+    return list(dict.fromkeys(hotel_tools.TOOLS[n].label for n in names if n in hotel_tools.TOOLS))
+
+
+@admin_bp.route("/dashboard/<int:agent_id>/preview/history")
+@platform_admin_required
+def agent_preview_history(agent_id):
+    """Messages of a session, so the chat survives a page refresh."""
+    _get_agent_or_404(agent_id)
+    guest = conversation_service.get_or_create_guest(request.args.get("guest_id"))
+    conversation = conversation_service.find_conversation(request.args.get("session_id"), agent_id, guest["id"])
+    if conversation is None:
+        return jsonify(error="Conversation not found."), 404
+    messages = [
+        {"role": m["role"], "content": m["content"], "status": m["status"], "created_at": m["created_at"],
+         "tools": _tool_labels(m["tool_calls"])}
+        for m in conversation_service.get_messages(conversation["id"])
+    ]
+    return jsonify(session_id=conversation["session_id"], messages=messages)
+
+
+@admin_bp.route("/dashboard/<int:agent_id>/conversations/<int:conversation_id>/")
+@platform_admin_required
+def conversation_detail(agent_id, conversation_id):
+    agent = _get_agent_or_404(agent_id)
+    conversation = conversation_service.get_conversation(conversation_id)
+    if conversation is None or conversation["agent_id"] != agent_id:
+        abort(404)  # never show another agent's conversation
+    messages = conversation_service.get_messages(conversation_id)
+    answers = [m for m in messages if m["role"] == "assistant" and m["latency_ms"] is not None]
+    totals = {
+        "tokens": sum((m["input_tokens"] or 0) + (m["output_tokens"] or 0) for m in messages),
+        "avg_latency_ms": int(sum(m["latency_ms"] for m in answers) / len(answers)) if answers else None,
+        "errors": sum(1 for m in messages if m["status"] == "error"),
+    }
+    return render_template(
+        "conversation.html", agent=agent, hotel=hotel_service.get_hotel(agent["hotel_id"]),
+        conversation=conversation, messages=messages, totals=totals,
+    )
+
+
 @admin_bp.route("/agents/new", methods=["GET", "POST"])
-@login_required
+@platform_admin_required
 def agent_new():
     values, errors = {}, {}
     if request.method == "POST":
@@ -127,45 +291,40 @@ def agent_new():
             hotel = hotel_service.get_hotel(values["hotel_id"])
             log_service.log("agent_created", g.user["id"], agent_id, f"{values['agent_name']} for {hotel['name']}")
             flash(f"Agent {values['agent_name']} created for {hotel['name']}.", "success")
-            return redirect(url_for("admin.dashboard"))
+            return redirect(url_for("admin.agent_detail", agent_id=agent_id))
 
     return render_template(
         "agent_form.html",
-        mode="new",
         hotels=agent_service.unconfigured_hotels(),
         values=values,
         errors=errors,
     )
 
 
-@admin_bp.route("/agents/<int:agent_id>/edit", methods=["GET", "POST"])
-@login_required
-def agent_edit(agent_id):
-    agent = agent_service.get_agent(agent_id)
-    if agent is None:
-        abort(404)
-    hotel = hotel_service.get_hotel(agent["hotel_id"])
+@admin_bp.route("/agents/<int:agent_id>/settings", methods=["POST"])
+@platform_admin_required
+def agent_update_settings(agent_id):
+    """Save the editable agent settings shown on the detail page."""
+    agent = _get_agent_or_404(agent_id)
+    values, errors = validate_agent_form(request.form, is_new=False)
 
-    values, errors = dict(agent), {}
-    if request.method == "POST":
-        values, errors = validate_agent_form(request.form, is_new=False)
-        if not errors:
-            agent_service.update_agent(agent_id, values)
-            log_service.log("agent_updated", g.user["id"], agent_id, values["agent_name"])
-            flash(f"Agent {values['agent_name']} updated.", "success")
-            return redirect(url_for("admin.agent_detail", agent_id=agent_id))
+    if errors:
+        flash("Please fix the highlighted fields.", "error")
+        return _render_agent_detail(agent, values=values, errors=errors)
 
-    return render_template(
-        "agent_form.html", mode="edit", agent=agent, hotel=hotel, values=values, errors=errors
-    )
+    if all(values[f] == agent[f] for f in ("agent_name", "greeting", "admin_prompt")):
+        flash("No changes to save.", "info")
+    else:
+        agent_service.update_agent(agent_id, values)
+        log_service.log("agent_updated", g.user["id"], agent_id, values["agent_name"])
+        flash(f"Settings for {values['agent_name']} saved.", "success")
+    return redirect(url_for("admin.agent_detail", agent_id=agent_id))
 
 
 @admin_bp.route("/agents/<int:agent_id>/toggle-status", methods=["POST"])
-@login_required
+@platform_admin_required
 def agent_toggle_status(agent_id):
-    agent = agent_service.get_agent(agent_id)
-    if agent is None:
-        abort(404)
+    agent = _get_agent_or_404(agent_id)
     agent_service.toggle_status(agent_id)
     new_status = "inactive" if agent["status"] == "active" else "active"
     log_service.log("agent_status_changed", g.user["id"], agent_id, f"{agent['agent_name']} → {new_status}")

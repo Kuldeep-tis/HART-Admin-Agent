@@ -3,6 +3,7 @@
 Usage in a template:  {{ item.created_at | timeago }}
 """
 
+import json
 from datetime import datetime, timezone
 
 
@@ -44,6 +45,10 @@ def initials(name):
     return "".join(part[0] for part in (name or "?").split()[:2]).upper()
 
 
+def from_json(value):
+    return json.loads(value) if value else []
+
+
 def register(blueprint):
-    for f in (timeago, localtime, date_fmt, money, initials):
+    for f in (timeago, localtime, date_fmt, money, initials, from_json):
         blueprint.add_app_template_filter(f)

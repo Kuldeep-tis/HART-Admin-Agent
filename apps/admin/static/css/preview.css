@@ -1,0 +1,252 @@
+/* ===== Preview page: sample hotel website + chat widget ===== */
+.preview-body {
+  --ink: #0f1b2d;
+  --ink-2: #1c2a40;
+  --gold: #b08d57;
+  --gold-soft: #f4ede1;
+  --cream: #f8f6f1;
+  --stone: #5d6472;
+  --line: #e7e3da;
+  --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  background: var(--cream); color: var(--ink);
+}
+
+/* --- Admin preview bar --- */
+.preview-bar {
+  position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem;
+  padding: .55rem 1.25rem; background: #0b1220; color: #cbd5e1; font-size: .82rem;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.preview-back { display: inline-flex; align-items: center; gap: .35rem; color: #fff; font-weight: 600; }
+.preview-back:hover { color: #e9d9bd; }
+.preview-divider { width: 1px; height: 16px; background: rgba(255,255,255,.15); }
+.preview-pill { display: inline-flex; align-items: center; gap: .3rem; padding: .12rem .55rem; border-radius: 999px; border: 1px solid rgba(233,217,189,.4); color: #e9d9bd; font-size: .72rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.preview-text strong { color: #fff; font-weight: 600; }
+.preview-warn { display: inline-flex; align-items: center; gap: .3rem; color: #fcd34d; font-weight: 500; }
+
+/* --- Hotel scene (illustration built from the hotel's data) --- */
+.preview-body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; overflow: hidden; }
+.scene {
+  position: relative; flex: 1; min-height: 560px; overflow: hidden; user-select: none;
+  background: linear-gradient(180deg, #dde5ee 0%, #e9ecef 45%, #f4ece0 78%, #efe8dc 100%);
+}
+.sky { position: absolute; inset: 0; pointer-events: none; }
+
+.cloud {
+  position: absolute; top: var(--top); left: 0; width: var(--w); height: calc(var(--w) * .18); border-radius: 50%;
+  background: rgba(255, 255, 255, .75); filter: blur(10px);
+  animation: drift var(--dur) linear var(--delay) infinite;
+}
+@keyframes drift { from { transform: translateX(calc(-1 * var(--w))); } to { transform: translateX(100vw); } }
+
+/* Birds fly in a band above the headline, never across it. */
+.flock { position: absolute; top: 4%; left: 0; right: 0; height: 16%; }
+.bird { position: absolute; top: var(--top); left: 0; width: var(--size); animation: fly var(--dur) linear var(--delay) infinite; }
+.bird svg { display: block; width: 100%; overflow: visible; animation: bob calc(var(--dur) / 6) ease-in-out infinite alternate; }
+.bird path { fill: none; stroke: #3d4756; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transform-box: fill-box; transform-origin: center; animation: flap var(--flap) ease-in-out infinite alternate; }
+@keyframes fly { from { transform: translateX(-40px); } to { transform: translateX(calc(100vw + 40px)); } }
+@keyframes bob { from { transform: translateY(-6px); } to { transform: translateY(6px); } }
+@keyframes flap { from { transform: scaleY(1); } to { transform: scaleY(-.45); } }
+
+.scene-copy { position: absolute; z-index: 2; top: 24%; left: clamp(1.25rem, 6vw, 6rem); max-width: 440px; }
+.scene-kicker { color: var(--gold); font-size: .74rem; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; }
+.scene-copy h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(2.6rem, 5.2vw, 4.4rem); line-height: 1.02; letter-spacing: -.005em; color: var(--ink); margin: .5rem 0 0; }
+.scene-rule { display: block; width: 56px; height: 1px; margin: 1.4rem 0 1.1rem; background: var(--gold); }
+.scene-meta { display: flex; align-items: center; gap: .4rem; margin: 0 0 .6rem; color: var(--ink); font-size: .9rem; font-weight: 500; }
+.scene-stars { display: inline-flex; gap: 1px; margin-left: .4rem; color: var(--gold); }
+.scene-stars .icon { fill: currentColor; stroke: none; }
+.scene-tagline { margin: 0; color: var(--stone); font-size: .95rem; line-height: 1.7; }
+.scene-facts { display: flex; flex-wrap: wrap; gap: 1.6rem; margin-top: 1.5rem; }
+.scene-facts span { display: flex; flex-direction: column; font-size: 1rem; font-weight: 600; color: var(--ink); }
+.scene-facts small { font-size: .66rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--stone); }
+
+.landscape { position: absolute; inset: 0; width: 100%; height: 100%; }
+.landscape .sign { fill: #8a6a3b; font-family: var(--serif); font-size: 22px; font-weight: 600; letter-spacing: 7px; }
+.landscape .win { fill: #c9d3dc; }
+.landscape .w0 { fill: #f3d595; }
+.landscape .w1 { fill: #f6e5bd; }
+.landscape .w2 { fill: #dfe5ea; }
+.landscape .w3 { fill: #b9c6d2; }
+.landscape .w4 { fill: #a7b6c5; }
+.landscape .flicker { animation: lights 8s ease-in-out var(--d) infinite; }
+@keyframes lights { 0%, 45% { fill: #a7b6c5; } 60%, 100% { fill: #f3d595; } }
+
+/* People: legs and arms swing from the hip/shoulder while the figure travels. */
+.leg { stroke: #2a2f38; stroke-width: 6; stroke-linecap: round; }
+.arm, .arm-fixed { stroke-width: 5; stroke-linecap: round; fill: none; }
+.leg, .arm { transform-box: fill-box; transform-origin: 50% 0; animation: stride .9s ease-in-out infinite alternate; }
+.leg-b, .arm-a { animation-direction: alternate-reverse; }
+.arm { animation-name: swing; }
+.person-body { animation: step .45s ease-in-out infinite alternate; }
+@keyframes stride { from { transform: rotate(22deg); } to { transform: rotate(-22deg); } }
+@keyframes swing { from { transform: rotate(-18deg); } to { transform: rotate(18deg); } }
+@keyframes step { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
+
+/* The guest walks to the door and goes in; the doorway brightens as they enter. */
+.walk-in { animation: walk-in 18s linear infinite; }
+@keyframes walk-in {
+  0% { transform: translateX(0); opacity: 0; }
+  4% { opacity: 1; }
+  78% { transform: translateX(890px); opacity: 1; }
+  84% { transform: translateX(905px); opacity: 0; }
+  100% { transform: translateX(905px); opacity: 0; }
+}
+.door-light { opacity: 0; animation: door 18s ease-in-out infinite; }
+@keyframes door { 0%, 76% { opacity: 0; } 84% { opacity: .85; } 94%, 100% { opacity: 0; } }
+.walk-west { animation: walk-west 28s linear -9s infinite; }
+.walk-east { animation: walk-east 34s linear -22s infinite; }
+@keyframes walk-west { from { transform: translateX(0); } to { transform: translateX(-1860px); } }
+@keyframes walk-east { from { transform: translateX(0); } to { transform: translateX(1860px); } }
+
+/* --- Chat widget: clean, neutral, easy to read --- */
+.chat-widget {
+  --c-primary: #0f1b2d;      /* brand navy: header avatar, guest bubbles, send */
+  --c-text: #111827;
+  --c-muted: #6b7280;
+  --c-subtle: #9ca3af;
+  --c-border: #e5e7eb;
+  --c-bot: #f3f4f6;          /* agent bubbles */
+  position: fixed; right: clamp(1rem, 2vw, 1.5rem); bottom: clamp(1rem, 2vw, 1.5rem); z-index: 50;
+  display: flex; flex-direction: column; align-items: flex-end; gap: .9rem;
+  font-family: "Inter", system-ui, sans-serif; color: var(--c-text);
+}
+
+.chat-launcher {
+  position: relative; display: grid; place-items: center; width: 58px; height: 58px; border: 0; border-radius: 50%;
+  background: var(--c-primary); color: #fff; cursor: pointer;
+  box-shadow: 0 10px 24px -8px rgba(15, 27, 45, .5); transition: transform .2s;
+}
+.chat-launcher:hover { transform: translateY(-2px); }
+.chat-launcher:focus-visible { outline: 3px solid #93a4bd; outline-offset: 3px; }
+.chat-launcher > span { position: absolute; display: grid; transition: transform .25s, opacity .2s; }
+.launcher-close { opacity: 0; transform: rotate(-90deg) scale(.6); }
+.chat-widget.is-open .launcher-open { opacity: 0; transform: rotate(90deg) scale(.6); }
+.chat-widget.is-open .launcher-close { opacity: 1; transform: none; }
+
+.chat-nudge {
+  position: absolute; right: 70px; bottom: 9px; display: flex; align-items: center; gap: .55rem; white-space: nowrap; cursor: pointer;
+  padding: .5rem .9rem .5rem .5rem; border-radius: 999px; background: #fff; border: 1px solid var(--c-border);
+  box-shadow: 0 8px 24px -10px rgba(15, 27, 45, .3); font-size: .85rem; color: var(--c-muted);
+  animation: nudge-in .4s .8s both;
+}
+.chat-nudge strong { color: var(--c-text); font-weight: 600; }
+.chat-nudge-avatar { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--c-primary); color: #fff; font-size: .68rem; font-weight: 600; }
+.chat-widget.is-open .chat-nudge, .chat-nudge.dismissed { display: none; }
+@keyframes nudge-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+
+.chat-panel {
+  width: min(420px, calc(100vw - 2rem)); height: min(680px, calc(100vh - 190px)); height: min(680px, calc(100dvh - 190px));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: #fff; border: 1px solid var(--c-border); border-radius: 18px;
+  box-shadow: 0 24px 48px -16px rgba(15, 27, 45, .28);
+  transform-origin: bottom right; animation: panel-in .25s cubic-bezier(.21, 1.02, .73, 1);
+}
+.chat-panel[hidden] { display: none; }
+@keyframes panel-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* Header */
+.chat-head { display: flex; align-items: center; gap: .75rem; padding: .9rem .75rem .9rem 1.1rem; border-bottom: 1px solid var(--c-border); background: #fff; }
+.chat-avatar { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--c-primary); color: #fff; font-size: .9rem; font-weight: 600; flex-shrink: 0; }
+.chat-online { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #22c55e; border: 2px solid #fff; }
+.chat-title { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.chat-title strong { font-size: 1rem; font-weight: 600; color: var(--c-text); }
+.chat-title span { font-size: .8rem; color: var(--c-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-icon-btn { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 10px; background: transparent; color: var(--c-muted); cursor: pointer; transition: background .15s, color .15s; flex-shrink: 0; }
+.chat-icon-btn:hover { background: var(--c-bot); color: var(--c-text); }
+.chat-icon-btn:focus-visible { outline: 2px solid #93a4bd; outline-offset: 1px; }
+
+/* Messages */
+.chat-messages { flex: 1; overflow-y: auto; padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; background: #fff; overscroll-behavior: contain; scroll-behavior: smooth; }
+.chat-messages::-webkit-scrollbar { width: 10px; }
+.chat-messages::-webkit-scrollbar-button { display: none; height: 0; }
+.chat-messages::-webkit-scrollbar-track { background: transparent; }
+.chat-messages::-webkit-scrollbar-thumb { background: transparent; border: 3px solid transparent; border-radius: 10px; background-clip: padding-box; }
+.chat-messages:hover::-webkit-scrollbar-thumb { background-color: #d1d5db; }
+@supports not selector(::-webkit-scrollbar) {
+  .chat-messages { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
+}
+
+.chat-intro { margin: .25rem auto .5rem; max-width: 300px; text-align: center; font-size: .8rem; line-height: 1.5; color: var(--c-muted); }
+.chat-day { display: flex; align-items: center; gap: .75rem; margin: .5rem 0 .25rem; font-size: .72rem; font-weight: 500; color: var(--c-subtle); }
+.chat-day::before, .chat-day::after { content: ""; flex: 1; height: 1px; background: var(--c-border); }
+
+/* Consecutive messages from the same sender group together: tight spacing,
+   and only the last one in a group keeps its avatar and timestamp. */
+.msg { display: flex; gap: .5rem; align-items: flex-end; max-width: 82%; margin-top: .85rem; animation: msg-in .2s ease-out; }
+.msg.follows-same { margin-top: .25rem; }
+@keyframes msg-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.msg-avatar { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--c-primary); color: #fff; font-size: .66rem; font-weight: 600; flex-shrink: 0; }
+.msg.is-stacked .msg-avatar { visibility: hidden; }
+.msg.is-stacked time, .msg.same-time time { display: none; }
+.msg-body { min-width: 0; }
+.bubble { padding: .6rem .9rem; border-radius: 16px; font-size: .92rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-bot .bubble { background: var(--c-bot); color: var(--c-text); border-bottom-left-radius: 4px; }
+.msg-user { align-self: flex-end; }
+.msg-user .bubble { background: var(--c-primary); color: #fff; border-bottom-right-radius: 4px; }
+.msg-error .bubble { background: var(--red-soft); color: var(--red); border-bottom-left-radius: 4px; }
+.msg time { display: block; margin: .3rem .25rem 0; font-size: .7rem; color: var(--c-subtle); }
+.msg-user time { text-align: right; }
+
+.chat-suggestions { display: flex; flex-wrap: wrap; gap: .4rem; margin: .75rem 0 0 2.25rem; }
+.chat-suggestions[hidden] { display: none; }
+.chat-suggestions button {
+  padding: .4rem .8rem; border-radius: 999px; border: 1px solid var(--c-border); background: #fff; color: var(--c-text);
+  font: inherit; font-size: .82rem; font-weight: 500; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.chat-suggestions button:hover { border-color: #c5ccd6; background: #f9fafb; }
+.chat-suggestions button:focus-visible { outline: 2px solid #93a4bd; outline-offset: 1px; }
+
+.typing { display: inline-flex; gap: 4px; padding: .8rem .9rem; }
+.typing i { width: 6px; height: 6px; border-radius: 50%; background: #9ca3af; animation: typing 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; }
+.typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes typing { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
+
+/* Composer */
+.chat-input { padding: .75rem 1rem .6rem; border-top: 1px solid var(--c-border); background: #fff; margin: 0; }
+.chat-composer {
+  display: flex; align-items: flex-end; gap: .5rem; padding: .3rem .3rem .3rem .9rem; border: 1px solid var(--c-border); border-radius: 14px; background: #fff;
+  transition: border-color .15s, box-shadow .15s;
+}
+.chat-composer:focus-within { border-color: #94a3b8; box-shadow: 0 0 0 3px rgba(15, 27, 45, .07); }
+.chat-composer textarea {
+  flex: 1; resize: none; min-height: 40px; max-height: 120px; padding: .6rem 0; border: 0; outline: none; background: transparent;
+  overflow-y: hidden; font: inherit; font-size: .92rem; line-height: 1.45; color: var(--c-text);
+}
+.chat-composer textarea::placeholder { color: var(--c-subtle); }
+.chat-send { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--c-primary); color: #fff; cursor: pointer; flex-shrink: 0; transition: opacity .15s, background .15s; }
+.chat-send:hover:not(:disabled) { background: #1c2a40; }
+.chat-send:focus-visible { outline: 2px solid #93a4bd; outline-offset: 2px; }
+.chat-send:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+.chat-foot { margin: .5rem 0 0; text-align: center; font-size: .7rem; color: var(--c-subtle); }
+
+/* Short screens: tighten the headline block so it clears the gardens. */
+@media (max-height: 820px) {
+  .scene-copy { top: 15%; }
+  .scene-copy h1 { font-size: clamp(2.2rem, 4.2vw, 3.4rem); }
+  .scene-rule { margin: 1rem 0 .8rem; }
+  .scene-facts { margin-top: 1rem; }
+}
+@media (max-width: 900px) {
+  .scene-copy { top: 14%; right: 1.25rem; }
+  /* Show the whole building, centred, instead of cropping it off the side. */
+  .landscape { top: auto; bottom: 0; left: 50%; right: auto; width: auto; height: 52%; aspect-ratio: 1600 / 700; transform: translateX(-50.6%); }
+  .scene-tagline { display: none; }
+}
+@media (max-width: 480px) {
+  .chat-widget { right: 1rem; bottom: 1rem; }
+  .chat-panel { position: fixed; inset: 0; width: auto; height: auto; border-radius: 0; z-index: 60; }
+  .chat-nudge { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-panel, .msg, .chat-nudge, .typing i { animation: none; }
+  .cloud, .bird, .bird svg, .bird path, .landscape .flicker, .leg, .arm, .person-body, .walk, .door-light { animation: none; }
+  .walk-in { transform: translateX(640px); }
+  .walk-west { transform: translateX(-500px); }
+  .bird { transform: translateX(55vw); }
+  .chat-launcher, .chat-send { transition: none; }
+}
+
+/* Which database tools the agent used for an answer */
+.msg-tools { margin-top: .3rem; font-size: .68rem; color: var(--muted); display: flex; align-items: center; gap: .3rem; }
+.msg-tools::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
