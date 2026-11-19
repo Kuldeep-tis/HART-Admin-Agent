@@ -43,7 +43,7 @@ def get_room_types_with_bookings(hotel_id):
     return get_hotel_db().execute(
         "SELECT rt.*, COUNT(b.id) AS booking_count"
         " FROM room_types rt"
-        " LEFT JOIN bookings b ON b.room_type_id = rt.id AND b.status != 'cancelled'"
+        " LEFT JOIN bookings b ON b.room_type_id = rt.id AND b.hotel_id = rt.hotel_id AND b.status != 'cancelled'"
         " WHERE rt.hotel_id = ?"
         " GROUP BY rt.id ORDER BY rt.base_price",
         (hotel_id,),
@@ -80,7 +80,7 @@ def get_booking_stats(hotel_id):
 def get_recent_bookings(hotel_id, limit=15):
     return get_hotel_db().execute(
         "SELECT b.*, rt.name AS room_type FROM bookings b"
-        " JOIN room_types rt ON rt.id = b.room_type_id"
+        " JOIN room_types rt ON rt.id = b.room_type_id AND rt.hotel_id = b.hotel_id"
         " WHERE b.hotel_id = ?"
         " ORDER BY b.check_in_date DESC, b.id DESC LIMIT ?",
         (hotel_id, limit),

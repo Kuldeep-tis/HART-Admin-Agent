@@ -1,36 +1,87 @@
+{% import "_macros.html" as ui %}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}HART Admin Agent{% endblock %}</title>
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('admin.static', filename='img/favicon.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('admin.static', filename='css/style.css') }}">
 </head>
-<body>
-  <header class="topbar">
-    <a class="brand" href="{{ url_for('admin.landing') }}">HART <span>Admin Agent</span></a>
-    <nav>
-      {% if g.user %}
-        <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
-        <span class="muted">{{ g.user['name'] }}</span>
-        <form method="post" action="{{ url_for('admin.logout') }}" class="inline">
-          <button type="submit" class="btn btn-ghost">Logout</button>
-        </form>
-      {% else %}
-        <a class="btn" href="{{ url_for('admin.login') }}">Login</a>
-      {% endif %}
+<body class="{{ 'has-sidebar' if g.user }}">
+  {% if g.user %}
+  {# ---- Logged in: app shell with a left sidebar ---- #}
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('admin.dashboard') }}">
+      <span class="brand-mark">{{ ui.icon("bot", 18) }}</span>
+      <span>HART <em>Admin Agent</em></span>
+    </a>
+
+    <nav class="side-nav">
+      <span class="side-label">Platform</span>
+      <a href="{{ url_for('admin.dashboard') }}"
+         class="{{ 'active' if request.endpoint == 'admin.dashboard' or (request.endpoint or '').startswith('admin.agent') }}">
+        {{ ui.icon("grid", 18) }} <span>Dashboard</span>
+      </a>
+      <a href="{{ url_for('admin.agent_new') }}">
+        {{ ui.icon("plus", 18) }} <span>Add hotel agent</span>
+      </a>
     </nav>
+
+    <div class="side-user">
+      <span class="avatar">{{ g.user['name'] | initials }}</span>
+      <div class="side-user-info">
+        <strong>{{ g.user['name'] }}</strong>
+        <span>{{ g.user['email'] }}</span>
+      </div>
+      <form method="post" action="{{ url_for('admin.logout') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="icon-btn" title="Logout" aria-label="Logout">{{ ui.icon("logout", 18) }}</button>
+      </form>
+    </div>
+  </aside>
+  {% else %}
+  {# ---- Logged out: simple top bar ---- #}
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('admin.landing') }}">
+        <span class="brand-mark">{{ ui.icon("bot", 18) }}</span>
+        <span>HART <em>Admin Agent</em></span>
+      </a>
+      <a class="btn" href="{{ url_for('admin.login') }}">Login</a>
+    </div>
   </header>
+  {% endif %}
 
   <main class="container">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-        <div class="flash flash-{{ category }}">{{ message }}</div>
-      {% endfor %}
-    {% endwith %}
-
     {% block content %}{% endblock %}
   </main>
+
+  {# Flash messages appear as toasts (bottom-right) and auto-dismiss via admin.js #}
+  {% set TOAST_KINDS = {
+    "success": ("check", "Success"),
+    "error": ("alert", "Something went wrong"),
+    "warning": ("alert", "Warning"),
+    "info": ("info", "Info"),
+  } %}
+  <div class="toast-stack" aria-live="polite">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        {% set kind = category if category in TOAST_KINDS else "info" %}
+        <div class="toast toast-{{ kind }}" role="{{ 'alert' if kind == 'error' else 'status' }}" data-toast>
+          <span class="toast-icon">{{ ui.icon(TOAST_KINDS[kind][0], 18) }}</span>
+          <div class="toast-text">
+            <strong class="toast-title">{{ TOAST_KINDS[kind][1] }}</strong>
+            <p class="toast-msg">{{ message }}</p>
+          </div>
+          <button type="button" class="toast-close" aria-label="Dismiss notification" data-toast-close>{{ ui.icon("close", 16) }}</button>
+          <span class="toast-progress"></span>
+        </div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <script src="{{ url_for('admin.static', filename='js/admin.js') }}"></script>
 </body>
 </html>

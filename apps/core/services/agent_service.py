@@ -49,8 +49,9 @@ def create_agent(data, created_by):
 def update_agent(agent_id, data):
     db = get_platform_db()
     db.execute(
-        "UPDATE agents SET agent_name = ?, greeting = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (data["agent_name"], data["greeting"], agent_id),
+        "UPDATE agents SET agent_name = ?, greeting = ?, admin_prompt = ?,"
+        " updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (data["agent_name"], data["greeting"], data["admin_prompt"], agent_id),
     )
     db.commit()
 

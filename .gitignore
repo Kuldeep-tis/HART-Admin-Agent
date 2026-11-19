@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 database/*.db
 .env
+.pytest_cache/
+database/*.db-journal

@@ -1,0 +1,94 @@
+{# Reusable UI pieces. Import with:  {% import "_macros.html" as ui %} #}
+
+{% set ICONS = {
+  "refresh": '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/>',
+  "users": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  "eye": '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  "edit": '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+  "plus": '<path d="M12 5v14M5 12h14"/>',
+  "login": '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+  "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  "bot": '<rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/>',
+  "power": '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+  "back": '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  "chat": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  "pin": '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  "mail": '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-10 5L2 7"/>',
+  "phone": '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  "clock": '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  "star": '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>',
+  "activity": '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  "building": '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>',
+  "check": '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  "pause": '<circle cx="12" cy="12" r="10"/><path d="M10 15V9M14 15V9"/>',
+  "calendar": '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  "bed": '<path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9"/>',
+  "money": '<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+  "x": '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',
+  "shield": '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  "close": '<path d="M18 6 6 18M6 6l12 12"/>',
+  "alert": '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+  "info": '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  "lock": '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  "database": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  "send": '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  "grid": '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+} %}
+
+{% macro icon(name, size=18) -%}
+<svg class="icon" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ ICONS[name] | safe }}</svg>
+{%- endmacro %}
+
+{# On/off switch that posts to the toggle-status route. #}
+{% macro status_switch(agent, return_to="dashboard") -%}
+<form method="post" action="{{ url_for('admin.agent_toggle_status', agent_id=agent.id) }}" class="switch-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="return_to" value="{{ return_to }}">
+  <label class="switch" title="{{ 'Turn agent off' if agent.status == 'active' else 'Turn agent on' }}">
+    <input type="checkbox" data-autosubmit {{ "checked" if agent.status == "active" }}
+           aria-label="Agent {{ agent.agent_name }} is {{ agent.status }}">
+    <span class="slider"></span>
+  </label>
+  <span class="switch-label {{ agent.status }}">{{ "On" if agent.status == "active" else "Off" }}</span>
+  <noscript><button type="submit" class="btn btn-sm">Toggle</button></noscript>
+</form>
+{%- endmacro %}
+
+{% set ACTIVITY_STYLE = {
+  "login": ("login", "blue"), "logout": ("logout", "gray"),
+  "agent_created": ("plus", "green"), "agent_updated": ("edit", "amber"),
+  "agent_status_changed": ("power", "violet"),
+} %}
+
+{% macro activity_feed(items, empty_text="No activity yet.") -%}
+{% if items %}
+<ol class="feed">
+  {% for item in items %}
+  {% set style = ACTIVITY_STYLE.get(item.action, ("activity", "gray")) %}
+  <li>
+    <span class="feed-dot tone-{{ style[1] }}">{{ icon(style[0], 14) }}</span>
+    <div class="feed-body">
+      <p><strong>{{ item.user_name or "System" }}</strong> {{ item.action.replace("_", " ") }}</p>
+      {% if item.details %}<p class="feed-details">{{ item.details }}</p>{% endif %}
+      <time title="{{ item.created_at | localtime }}">{{ item.created_at | timeago }}</time>
+    </div>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="empty-inline">{{ empty_text }}</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro booking_badge(status) -%}
+<span class="badge badge-{{ status }}">{{ status.replace("_", " ") }}</span>
+{%- endmacro %}
+
+{# Shows where a panel's data comes from. #}
+{% macro source_badge(kind) -%}
+{% if kind == "hotel" %}
+<span class="source source-readonly" title="Read-only: fetched live from hotel_info.db. Cannot be changed here." aria-label="Read-only" role="img">{{ icon("lock", 12) }}</span>
+{% else %}
+<span class="source source-editable" title="Editable: stored in HART_Admin_Agent.db. You can change it here." aria-label="Editable" role="img">{{ icon("edit", 12) }}</span>
+{% endif %}
+{%- endmacro %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Conversation {{ conversation.session_id[:8] }} · {{ agent.agent_name }} · HART Admin Agent{% endblock %}
+
+{% block content %}
+<a class="back-link" href="{{ url_for('admin.agent_detail', agent_id=agent.id) }}#conversations">{{ ui.icon("back", 16) }} {{ agent.agent_name }} · Conversations</a>
+
+<div class="page-head">
+  <div>
+    <h1>Conversation <code class="h-code">{{ conversation.session_id[:8] }}</code></h1>
+    <p class="subtitle">{{ agent.agent_name }} · {{ hotel.name if hotel else "Hotel #" ~ conversation.hotel_id }} · started {{ conversation.started_at | localtime }}</p>
+  </div>
+</div>
+
+<div class="layout-with-aside">
+  <section class="main-col">
+    <div class="panel transcript-panel">
+      <div class="panel-head"><h2>{{ ui.icon("chat", 16) }} Transcript</h2><span class="muted">{{ messages | length }} messages</span></div>
+      {# Scrolls on its own and opens at the latest message; scroll up for older ones. #}
+      <div class="transcript" data-autoscroll tabindex="0" aria-label="Transcript, scroll up for older messages">
+        {% for m in messages %}
+        <div class="t-msg t-{{ m.role }}{% if m.status == 'error' %} t-error{% endif %}">
+          <span class="t-avatar">{{ agent.agent_name | initials if m.role == "assistant" else "G" }}</span>
+          <div class="t-body">
+            {% set calls = m.tool_calls | from_json %}
+            {% if calls %}
+            <details class="t-tools">
+              <summary>{{ ui.icon("database", 13) }} Used {{ calls | length }} database tool{{ "s" if calls | length > 1 }}:
+                {% for c in calls %}<code>{{ c.name }}</code>{{ ", " if not loop.last }}{% endfor %}</summary>
+              {% for c in calls %}
+              <div class="t-tool">
+                <strong>{{ c.name }}</strong>({% for k, v in c.args.items() %}{{ k }}={{ v }}{{ ", " if not loop.last }}{% endfor %})
+                <pre>{{ c.result | tojson(indent=2) }}</pre>
+              </div>
+              {% endfor %}
+            </details>
+            {% endif %}
+            <div class="t-bubble">{{ m.content }}</div>
+            <div class="t-meta">
+              <time title="{{ m.created_at | localtime }}">{{ m.created_at | localtime("%H:%M:%S") }}</time>
+              {% if m.status == "error" %}<span class="badge badge-cancelled">AI error</span>{% endif %}
+              {% if m.model %}<span>{{ m.model }}</span>{% endif %}
+              {% if m.input_tokens is not none %}<span title="input tokens → output tokens">{{ m.input_tokens }} → {{ m.output_tokens }} tokens</span>{% endif %}
+              {% if m.latency_ms is not none %}<span>{{ "%.1f" % (m.latency_ms / 1000) }} s</span>{% endif %}
+              {% if loop.first and m.role == "assistant" %}<span>greeting</span>{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="jump-latest" data-jump-latest hidden>↓ Latest message</button>
+    </div>
+  </section>
+
+  <aside class="aside">
+    <div class="panel">
+      <div class="panel-head"><h2>{{ ui.icon("database", 16) }} Session details</h2></div>
+      <dl class="details details-stacked panel-body">
+        <dt>Session ID</dt><dd><code>{{ conversation.session_id }}</code></dd>
+        <dt>Guest ID</dt><dd><code>{{ conversation.guest_public_id }}</code></dd>
+        <dt>Agent</dt><dd>{{ agent.agent_name }} <span class="muted">(#{{ agent.id }})</span></dd>
+        <dt>Hotel</dt><dd>{{ hotel.name if hotel else "—" }} <span class="muted">(#{{ conversation.hotel_id }})</span></dd>
+        <dt>Channel</dt><dd><span class="badge badge-channel-{{ conversation.channel }}">{{ conversation.channel }}</span>
+          {% if conversation.started_by_name %}<span class="muted">by {{ conversation.started_by_name }}</span>{% endif %}</dd>
+        <dt>Started</dt><dd>{{ conversation.started_at | localtime }}</dd>
+        <dt>Last message</dt><dd>{{ conversation.last_message_at | localtime }} <span class="muted">({{ conversation.last_message_at | timeago }})</span></dd>
+      </dl>
+      <dl class="meta-list">
+        <dt>Messages</dt><dd>{{ conversation.message_count }}</dd>
+        <dt>Tokens used</dt><dd>{{ "{:,}".format(totals.tokens) }}</dd>
+        <dt>Avg. reply time</dt><dd>{{ "%.1f s" % (totals.avg_latency_ms / 1000) if totals.avg_latency_ms else "—" }}</dd>
+        <dt>AI errors</dt><dd>{{ totals.errors }}</dd>
+      </dl>
+    </div>
+  </aside>
+</div>
+{% endblock %}

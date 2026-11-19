@@ -1,11 +1,14 @@
 from apps.core.services import agent_service, hotel_service
 
+MAX_ADMIN_PROMPT = 2000
+
 
 def validate_agent_form(form, is_new):
     """Return (clean_data, errors). errors is empty when the form is valid."""
     data = {
         "agent_name": (form.get("agent_name") or "").strip(),
         "greeting": (form.get("greeting") or "").strip() or None,
+        "admin_prompt": (form.get("admin_prompt") or "").strip() or None,
     }
     errors = {}
 
@@ -26,5 +29,8 @@ def validate_agent_form(form, is_new):
 
     if data["greeting"] and len(data["greeting"]) > 500:
         errors["greeting"] = "Keep the greeting under 500 characters."
+
+    if data["admin_prompt"] and len(data["admin_prompt"]) > MAX_ADMIN_PROMPT:
+        errors["admin_prompt"] = f"Keep custom instructions under {MAX_ADMIN_PROMPT} characters."
 
     return data, errors
