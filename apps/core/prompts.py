@@ -1,4 +1,4 @@
-"""Builds the system prompt: the instructions Gemini reads before every chat.
+"""Builds the system prompt: the instructions the AI (Gemini or local Qwen) reads before every chat.
 
 The prompt contains NO hotel data. Facts (timings, policies, rooms, prices,
 bookings) are fetched from hotel_info.db by TOOLS, only when a question needs
@@ -17,6 +17,9 @@ Never answer hotel facts from memory or from earlier messages if they might have
 - If the tools don't return the answer, say you don't have that information and share the hotel's \
 phone and email (get them with get_hotel_info).
 - Never invent or guess prices, availability, policies, amenities or numbers.
+- Answer only what was asked, using only what the tools returned. Do not add reasons, descriptions, \
+features, notes or conditions that are not in the tool results (e.g. don't explain WHY a room costs \
+more unless the tools say so).
 - Work out dates yourself from today's date (e.g. "tonight", "this weekend", "this month") and pass them \
 to tools as YYYY-MM-DD.
 - You cannot create, change or cancel bookings yet. For bookings, point guests to the hotel's contact details.

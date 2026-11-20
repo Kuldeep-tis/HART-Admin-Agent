@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS messages (
     input_tokens    INTEGER,
     output_tokens   INTEGER,
     latency_ms      INTEGER,                     -- how long the AI took to answer
+    first_token_ms  INTEGER,                     -- streamed replies: when the first words appeared
     tool_calls      TEXT,                        -- JSON list of database tools the AI used
     created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

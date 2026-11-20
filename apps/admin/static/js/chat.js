@@ -135,12 +135,21 @@
           "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || "",
         },
         // No history here: the server reads it from the database using session_id.
-        body: JSON.stringify({ message: text, session_id: store.get(SESSION_KEY), guest_id: store.get(GUEST_KEY) }),
+        // stream: true = send the answer word by word instead of all at the end.
+        body: JSON.stringify({
+          message: text, session_id: store.get(SESSION_KEY), guest_id: store.get(GUEST_KEY), stream: true,
+        }),
       });
       await minDelay;
 
+      const type = res.headers.get("content-type") || "";
+      if (type.includes("application/x-ndjson")) {
+        await readStream(res, typing);
+        return;
+      }
+      // Not streamed: validation errors (400/429) come back as one JSON object.
       // If the session expired, Flask redirects to the login page (HTML, not JSON).
-      if (!(res.headers.get("content-type") || "").includes("application/json")) {
+      if (!type.includes("application/json")) {
         throw new Error("Your session has expired. Please log in again.");
       }
       const data = await res.json();
@@ -158,6 +167,71 @@
       autosize();
       input.focus();
     }
+  }
+
+  // Read the streamed answer: one JSON object per line (NDJSON), shown as it arrives.
+  async function readStream(res, typing) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let msg = null;   // the bot bubble, created when the first words arrive
+    let text = "";
+    let finished = false;
+
+    const bubble = () => {
+      if (!msg) {
+        typing.remove();
+        msg = addMessage("bot", "");
+      }
+      return msg.querySelector(".bubble");
+    };
+    const showTools = (target, labels) => {
+      // Small line under the bubble, e.g. "Checked room types".
+      const body = target.querySelector(".msg-body");
+      let el = body.querySelector(".msg-tools");
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "msg-tools";
+        body.insertBefore(el, body.querySelector("time"));
+      }
+      el.textContent = labels.join(" · ");
+    };
+
+    const handle = (event) => {
+      if (event.session_id) store.set(SESSION_KEY, event.session_id);
+      if (event.guest_id) store.set(GUEST_KEY, event.guest_id);
+      if (event.type === "token") {
+        text += event.text;
+        bubble().textContent = text; // textContent, never innerHTML
+        scrollDown();
+      } else if (event.type === "reset") {
+        text = "";
+        if (msg) msg.querySelector(".bubble").textContent = "";
+      } else if (event.type === "tool") {
+        showTools(msg || typing, [event.label]); // "the agent is looking something up"
+        scrollDown();
+      } else if (event.type === "done") {
+        finished = true;
+        bubble();
+        if (event.tools?.length) showTools(msg, event.tools);
+      } else if (event.type === "error") {
+        finished = true;
+        throw new Error(event.error || "Something went wrong. Please try again.");
+      }
+    };
+
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline;
+      while ((newline = buffer.indexOf("\n")) >= 0) {
+        const lineText = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (lineText) handle(JSON.parse(lineText));
+      }
+    }
+    if (!finished) throw new Error("The reply was cut off. Please try again.");
   }
 
   function reset() {

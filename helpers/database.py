@@ -58,6 +58,7 @@ def close_dbs(exc=None):
 ADDED_COLUMNS = [
     ("agents", "admin_prompt", "TEXT"),
     ("messages", "tool_calls", "TEXT"),
+    ("messages", "first_token_ms", "INTEGER"),
 ]
 
 

@@ -96,13 +96,14 @@ def stats_for_agent(agent_id):
 # ---------- Messages ----------
 
 def add_message(conversation_id, role, content, status="ok", model=None,
-                input_tokens=None, output_tokens=None, latency_ms=None, tool_calls=None):
+                input_tokens=None, output_tokens=None, latency_ms=None, tool_calls=None,
+                first_token_ms=None):
     db = get_platform_db()
     db.execute(
         "INSERT INTO messages (conversation_id, role, content, status, model, input_tokens, output_tokens,"
-        " latency_ms, tool_calls) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " latency_ms, tool_calls, first_token_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (conversation_id, role, content, status, model, input_tokens, output_tokens, latency_ms,
-         json.dumps(tool_calls, default=str) if tool_calls else None),
+         json.dumps(tool_calls, default=str) if tool_calls else None, first_token_ms),
     )
     db.execute(
         "UPDATE conversations SET message_count = message_count + 1, last_message_at = CURRENT_TIMESTAMP"

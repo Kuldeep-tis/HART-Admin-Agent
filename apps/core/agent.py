@@ -3,7 +3,11 @@
 The platform talks to the agent ONLY through respond(). Everything about how
 the answer is produced (prompt, model, tools, later LangGraph) lives here.
 
-How one answer is produced (the "tool loop"):
+Which AI answers is set by LLM_PROVIDER in .env:
+  "gemini" = Google's cloud API (the code below)
+  "local"  = Qwen on our own machine via Ollama (apps/core/models/qwen.py)
+
+How one answer is produced with Gemini (the "tool loop"):
   1. Send Gemini: system prompt (no hotel data) + conversation + list of tools.
   2. Gemini either answers with text (done), or asks to call tools.
   3. We run the requested tools on hotel_info.db FOR THIS AGENT'S HOTEL ONLY,
@@ -20,6 +24,7 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 from apps.core import prompts, tools
+from apps.core.models import qwen
 from apps.core.services import hotel_service
 
 logger = logging.getLogger(__name__)
@@ -150,6 +155,12 @@ def respond(agent, message: str, history: list) -> AgentReply:
     message: the latest user message.
     history: earlier turns [{"role": "user" | "assistant", "content": "..."}] (from the DB).
     """
+    provider = current_app.config.get("LLM_PROVIDER", "gemini")
+    if provider == "local":
+        return _respond_local(agent, message, history)
+    if provider != "gemini":
+        raise AgentError(f"Unknown LLM_PROVIDER '{provider}' in .env. Use 'gemini' or 'local'.")
+
     client = _get_client()
     config = types.GenerateContentConfig(
         system_instruction=system_prompt_for(agent),
@@ -168,6 +179,59 @@ def respond(agent, message: str, history: list) -> AgentReply:
         except ModelUnavailable as exc:
             last_error = exc
     raise last_error
+
+
+def respond_stream(agent, message: str, history: list):
+    """Like respond(), but yields events while the answer is being written:
+
+        {"type": "token", "text": "..."}   more words of the answer
+        {"type": "tool",  "name": "..."}   a database tool is being run
+        {"type": "reset"}                  clear the words shown so far
+        {"type": "final", "reply": AgentReply}   always the last event
+
+    Raises AgentError (possibly after some events) when the answer fails.
+    """
+    if current_app.config.get("LLM_PROVIDER", "gemini") == "local":
+        yield from _stream_local(agent, message, history)
+        return
+    # Gemini isn't streamed yet: send the whole answer as one piece.
+    reply = respond(agent, message, history)
+    yield {"type": "token", "text": reply.text}
+    yield {"type": "final", "reply": reply}
+
+
+def _respond_local(agent, message, history):
+    """Answer with the local Qwen model and wait for the whole reply."""
+    for event in _stream_local(agent, message, history):
+        if event["type"] == "final":
+            return event["reply"]
+    raise AgentError("The AI returned an empty reply. Please try rephrasing your question.")
+
+
+def _stream_local(agent, message, history):
+    """Answer with the local Qwen model (data never leaves our server), streamed."""
+    cfg = current_app.config
+    events = qwen.stream_answer(
+        system_prompt=system_prompt_for(agent),
+        history=history,
+        message=message,
+        hotel_id=agent["hotel_id"],   # from the agent's row, never from the AI
+        url=cfg["OLLAMA_URL"],
+        model=cfg["OLLAMA_MODEL"],
+        timeout=cfg["OLLAMA_TIMEOUT"],
+        keep_alive=cfg.get("OLLAMA_KEEP_ALIVE", "30m"),
+    )
+    try:
+        for event in events:
+            if event["type"] == "final":
+                r = event["reply"]   # Qwen's reply -> our app's AgentReply
+                event = {"type": "final", "reply": AgentReply(
+                    text=r.text, model=r.model, input_tokens=r.input_tokens,
+                    output_tokens=r.output_tokens, tool_calls=r.tool_calls,
+                )}
+            yield event
+    except qwen.QwenError as exc:
+        raise AgentError(str(exc)) from exc   # the route already shows AgentError messages
 
 
 def _answer_with(client, agent, model, config, contents):

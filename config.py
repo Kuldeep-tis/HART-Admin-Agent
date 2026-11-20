@@ -53,7 +53,21 @@ class Config:
     # Hotel database: the hotel system's data (hotels, rooms, bookings). Read-only for us.
     HOTEL_DATABASE = os.environ.get("HOTEL_DATABASE", str(DB_DIR / "hotel_info.db"))
 
-    # Gemini (the LLM behind every hotel agent)
+    # Which AI answers the chats:
+    #   "gemini" = Google's cloud API (data leaves our server; use only with fake data)
+    #   "local"  = a model running on our own machine through Ollama (data stays with us)
+    LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "gemini").strip().lower()
+
+    # Local model (used when LLM_PROVIDER=local). Ollama runs as a service, like MySQL.
+    OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
+    OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:4b")
+    # Max seconds to wait for one model call. CPU-only machines are slow (20-60 s per answer).
+    OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "180"))
+    # How long Ollama keeps the model in RAM after the last chat. Loading it again is slow,
+    # so keep it longer than Ollama's default of 5 minutes. Examples: "30m", "2h", "-1" (forever).
+    OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
+
+    # Gemini (used when LLM_PROVIDER=gemini)
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
     # Tried in order when a model is busy (503), out of free quota (429) or retired (404).
