@@ -174,10 +174,14 @@ def agent_preview(agent_id):
     hotel = hotel_service.get_hotel(agent["hotel_id"])
     rooms = hotel_service.get_room_types(agent["hotel_id"]) if hotel else []
     hotel_agent.warm_up(agent)   # local model: pre-read prompt + tools while the page loads
-    return render_template(
+    response = Response(render_template(
         "preview.html", agent=agent, hotel=hotel, rooms=rooms,
         greeting=hotel_agent.greeting_for(agent, hotel),
-    )
+    ))
+    # The chat's mic button needs the microphone. Every other page keeps it blocked
+    # (helpers/security.py only sets its stricter default when a page sets none).
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
+    return response
 
 
 @admin_bp.route("/dashboard/<int:agent_id>/preview/chat", methods=["POST"])
@@ -245,7 +249,9 @@ def _stream_reply(agent, conversation, message, history, ids):
     """Send the answer while it is being written, as NDJSON (one JSON object per line):
 
         {"type": "token", "text": "Check-in"}           more words
-        {"type": "tool", "label": "Checked hotel info"}  a database lookup is running
+        {"type": "table", "table": {"title", "columns", "rows"}}   the answer as a table
+        {"type": "tool", "label": "Checked hotel info", "progress": "Looking up hotel details…"}
+                                                         a database lookup is running
         {"type": "reset"}                                clear the words shown so far
         {"type": "done", "tools": [...], "session_id": ..., "guest_id": ...}
         {"type": "error", "error": "...", "session_id": ..., "guest_id": ...}
@@ -268,11 +274,12 @@ def _stream_reply(agent, conversation, message, history, ids):
                     reply = event["reply"]
                 elif event["type"] == "tool":
                     tool = hotel_tools.TOOLS.get(event["name"])
-                    yield line({"type": "tool", "label": tool.label if tool else "Looked up hotel data"})
+                    yield line({"type": "tool", "label": tool.label if tool else "Looked up hotel data",
+                                "progress": tool.progress if tool else "Looking up hotel data…"})
                 else:
-                    if event["type"] == "token" and first_token_ms is None:
+                    if event["type"] in ("token", "table") and first_token_ms is None:
                         first_token_ms = ms_since(started)
-                    yield line(event)   # token / reset
+                    yield line(event)   # token / table / reset
         except GeneratorExit:
             # The browser stopped listening (page refreshed or closed, network dropped).
             # Store that, so the question doesn't sit in the transcript without any reply.
@@ -318,6 +325,18 @@ def _tool_labels(tool_calls_json):
     return list(dict.fromkeys(hotel_tools.TOOLS[n].label for n in names if n in hotel_tools.TOOLS))
 
 
+def _table_for(tool_calls_json, content):
+    """Rebuild the table of a Python-written answer from its stored tool result (None otherwise).
+    Only when the stored text IS that tool's rendered answer, so model-written replies stay text."""
+    calls = json.loads(tool_calls_json) if tool_calls_json else []
+    if len(calls) != 1:
+        return None
+    name, result = calls[0].get("name"), calls[0].get("result") or {}
+    if hotel_tools.render(name, result) != content:
+        return None
+    return hotel_tools.table(name, result)
+
+
 @admin_bp.route("/dashboard/<int:agent_id>/preview/history")
 @platform_admin_required
 def agent_preview_history(agent_id):
@@ -329,7 +348,7 @@ def agent_preview_history(agent_id):
         return jsonify(error="Conversation not found."), 404
     messages = [
         {"role": m["role"], "content": m["content"], "status": m["status"], "created_at": m["created_at"],
-         "tools": _tool_labels(m["tool_calls"])}
+         "tools": _tool_labels(m["tool_calls"]), "table": _table_for(m["tool_calls"], m["content"])}
         for m in conversation_service.get_messages(conversation["id"])
     ]
     return jsonify(session_id=conversation["session_id"], messages=messages)

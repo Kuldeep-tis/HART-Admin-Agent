@@ -196,6 +196,7 @@
       <form class="chat-input" data-chat-form>
         <div class="chat-composer">
           <textarea rows="1" maxlength="1000" placeholder="Ask {{ agent.agent_name }} anything…" aria-label="Message" data-chat-text></textarea>
+          <button type="button" class="chat-mic" aria-label="Speak your question" aria-pressed="false" title="Speak your question" data-chat-mic hidden>{{ ui.icon("mic", 18) }}</button>
           <button type="submit" class="chat-send" aria-label="Send message" data-chat-send disabled>{{ ui.icon("send", 17) }}</button>
         </div>
         <p class="chat-foot">AI-generated answers can contain mistakes.</p>

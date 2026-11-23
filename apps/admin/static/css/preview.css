@@ -187,6 +187,27 @@
 .msg time { display: block; margin: .3rem .25rem 0; font-size: .7rem; color: var(--c-subtle); }
 .msg-user time { text-align: right; }
 
+/* Table answers (e.g. booking lists): use the full chat width, scroll sideways if still too wide. */
+.msg:has(.has-table) { max-width: 100%; }
+/* the table card is the bubble: no grey bubble padding around it (saves width) */
+.msg-bot .bubble.has-table { white-space: normal; padding: 0; background: transparent; }
+.chat-table-title { margin: .1rem .15rem .4rem; font-weight: 600; font-size: .85rem; }
+.chat-table-wrap { overflow-x: auto; border: 1px solid var(--c-border); border-radius: 10px; background: #fff; }
+.chat-table { width: 100%; border-collapse: collapse; font-size: .76rem; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.chat-table th { padding: .4rem .38rem; background: #f9fafb; color: var(--c-muted); font-size: .62rem; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--c-border); }
+.chat-table td { padding: .45rem .38rem; border-bottom: 1px solid var(--c-border); vertical-align: top; white-space: nowrap; }
+.chat-table tbody tr:last-child td { border-bottom: 0; }
+.chat-table tbody tr:hover td { background: #f9fafb; }
+.chat-table .cell-sub { display: block; margin-top: .1rem; font-size: .68rem; color: var(--c-subtle); }
+.chat-table td[data-col="Booking"] { font-weight: 500; white-space: normal; min-width: 4.5rem; } /* long room names wrap */
+.chat-table td[data-col="Guests"], .chat-table td[data-col="Amount"],
+.chat-table th:nth-child(3), .chat-table th:nth-child(4) { text-align: right; }
+.chat-status { display: inline-block; padding: .1rem .4rem; border-radius: 999px; font-size: .64rem; font-weight: 600; text-transform: capitalize; white-space: nowrap; background: #f3f4f6; color: #374151; }
+.chat-status[data-status="confirmed"] { background: #e0ecff; color: #1d4ed8; }
+.chat-status[data-status="checked in"] { background: #dcfce7; color: #15803d; }
+.chat-status[data-status="checked out"] { background: #f3f4f6; color: #4b5563; }
+.chat-status[data-status="cancelled"] { background: #fee2e2; color: #b91c1c; }
+
 .chat-suggestions { display: flex; flex-wrap: wrap; gap: .4rem; margin: .75rem 0 0 2.25rem; }
 .chat-suggestions[hidden] { display: none; }
 .chat-suggestions button {
@@ -196,7 +217,18 @@
 .chat-suggestions button:hover { border-color: #c5ccd6; background: #f9fafb; }
 .chat-suggestions button:focus-visible { outline: 2px solid #93a4bd; outline-offset: 1px; }
 
-.typing { display: inline-flex; gap: 4px; padding: .8rem .9rem; }
+.typing { display: inline-flex; align-items: center; gap: .55rem; padding: .7rem .9rem; white-space: nowrap; }
+.typing-dots { display: inline-flex; gap: 4px; }
+.typing-status {
+  font-size: .82rem; font-weight: 500; color: transparent;
+  /* soft moving shine over the text: "still working", without being distracting */
+  background: linear-gradient(90deg, var(--c-muted) 0%, var(--c-muted) 40%, #d1d5db 50%, var(--c-muted) 60%, var(--c-muted) 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text;
+  animation: typing-shine 2s linear infinite;
+}
+.typing-clock { font-size: .75rem; color: var(--c-subtle); font-variant-numeric: tabular-nums; min-width: 1.6rem; }
+.typing-clock:empty { display: none; }
+@keyframes typing-shine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
 .typing i { width: 6px; height: 6px; border-radius: 50%; background: #9ca3af; animation: typing 1.2s infinite; }
 .typing i:nth-child(2) { animation-delay: .15s; }
 .typing i:nth-child(3) { animation-delay: .3s; }
@@ -218,7 +250,14 @@
 .chat-send:hover:not(:disabled) { background: #1c2a40; }
 .chat-send:focus-visible { outline: 2px solid #93a4bd; outline-offset: 2px; }
 .chat-send:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+.chat-mic { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--c-muted); cursor: pointer; flex-shrink: 0; transition: background .15s, color .15s; }
+.chat-mic[hidden] { display: none; }
+.chat-mic:hover { background: var(--c-bot); color: var(--c-text); }
+.chat-mic:focus-visible { outline: 2px solid #93a4bd; outline-offset: 2px; }
+.chat-mic.is-listening { background: #fee2e2; color: #b91c1c; animation: mic-pulse 1.4s ease-out infinite; }
+@keyframes mic-pulse { from { box-shadow: 0 0 0 0 rgba(220, 38, 38, .35); } to { box-shadow: 0 0 0 9px rgba(220, 38, 38, 0); } }
 .chat-foot { margin: .5rem 0 0; text-align: center; font-size: .7rem; color: var(--c-subtle); }
+.chat-foot.is-error { color: var(--red); font-weight: 500; }
 
 /* Short screens: tighten the headline block so it clears the gardens. */
 @media (max-height: 820px) {
@@ -239,7 +278,8 @@
   .chat-nudge { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .chat-panel, .msg, .chat-nudge, .typing i { animation: none; }
+  .chat-panel, .msg, .chat-nudge, .typing i, .typing-status, .chat-mic.is-listening { animation: none; }
+  .typing-status { color: var(--c-muted); background: none; }
   .cloud, .bird, .bird svg, .bird path, .landscape .flicker, .leg, .arm, .person-body, .walk, .door-light { animation: none; }
   .walk-in { transform: translateX(640px); }
   .walk-west { transform: translateX(-500px); }

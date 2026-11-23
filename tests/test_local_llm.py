@@ -278,3 +278,91 @@ def test_preview_page_warms_up_only_for_local(app, admin, agents, monkeypatch, p
             break
         time.sleep(0.01)
     assert bool(calls) is warmed
+
+
+# ---------- speed: Python-written lists, compact tool results, short history ----------
+
+def test_booking_list_needs_only_one_model_call(app, ollama):
+    ollama.replies = [tool_request("list_bookings", {"status": "cancelled"}), words("SHOULD NOT BE USED")]
+    with app.app_context():
+        reply = ask()
+    assert len(ollama.payloads) == 1                       # no second call to the model
+    booking_id = reply.tool_calls[0]["result"]["bookings"][0]["booking_id"]
+    assert f"#{booking_id}" in reply.text and "SHOULD NOT" not in reply.text
+
+
+def test_tool_error_still_goes_back_to_the_model(app, ollama):
+    ollama.replies = [tool_request("list_bookings", {"status": "deleted"}), words("Please pick a valid status.")]
+    with app.app_context():
+        reply = ask()
+    assert len(ollama.payloads) == 2 and reply.text == "Please pick a valid status."
+
+
+def test_tool_result_is_sent_as_compact_json(app, ollama):
+    ollama.replies = [tool_request("get_room_types"), words("Rooms.")]
+    with app.app_context():
+        ask()
+    content = ollama.payloads[1]["messages"][-1]["content"]
+    assert ", " not in content and '": ' not in content   # no padding spaces
+    assert json.loads(content)["room_types"]              # still valid JSON
+
+
+def test_long_old_messages_are_trimmed():
+    history = [{"role": "assistant", "content": "x" * 5000}]
+    sent = qwen.build_messages("sys", history, "next question")
+    assert len(sent[1]["content"]) == qwen.MAX_TURN_CHARS + 1 and sent[1]["content"].endswith("…")
+    assert sent[-1]["content"] == "next question"   # the new question is never trimmed
+
+
+def test_default_history_is_the_last_question_and_answer(app, admin, agents, ollama):
+    first = admin.chat(agents[2], "Q1").get_json()
+    ids = {"session_id": first["session_id"], "guest_id": first["guest_id"]}
+    admin.chat(agents[2], "Q2", **ids)
+    sent = [m["content"] for m in ollama.payloads[-1]["messages"][1:]]
+    assert sent == ["Q1", "Fake local answer.", "Q2"]
+
+
+def test_booking_list_is_streamed_as_a_table_and_survives_a_refresh(app, admin, agents, ollama):
+    ollama.replies = [tool_request("list_bookings", {"status": "cancelled"})]
+    r, events = stream_chat(admin, agents[2], "show cancelled bookings")
+    table = next(e["table"] for e in events if e["type"] == "table")
+    assert table["columns"][0] == "Booking" and table["rows"]
+    assert not any(e["type"] == "token" for e in events)       # the table IS the answer
+    done = events[-1]
+    assert done["type"] == "done"
+
+    with app.app_context():
+        conv = conversation_service.find_conversation(
+            done["session_id"], agents[2], conversation_service.get_or_create_guest(done["guest_id"])["id"])
+        answer = conversation_service.get_messages(conv["id"])[-1]
+    assert answer["first_token_ms"] is not None                  # the table counts as the first words
+    assert answer["content"].startswith(table["title"])           # text version stored for history
+
+    hist = admin.get(f"/dashboard/{agents[2]}/preview/history"
+                     f"?session_id={done['session_id']}&guest_id={done['guest_id']}").get_json()
+    assert hist["messages"][-1]["table"] == table                 # page refresh: same table again
+    assert hist["messages"][-2]["table"] is None                  # the question is not a table
+
+
+def test_model_written_replies_are_never_turned_into_tables(app, admin, agents, ollama):
+    r, events = stream_chat(admin, agents[2], "hi")
+    done = events[-1]
+    hist = admin.get(f"/dashboard/{agents[2]}/preview/history"
+                     f"?session_id={done['session_id']}&guest_id={done['guest_id']}").get_json()
+    assert all(m["table"] is None for m in hist["messages"])
+
+
+def test_tool_events_tell_the_browser_what_is_happening(app, admin, agents, ollama):
+    ollama.replies = [tool_request("check_room_availability", {"check_in": "2030-01-05"}), words("Rooms free.")]
+    r, events = stream_chat(admin, agents[2], "rooms free on 5 jan 2030?")
+    tool = next(e for e in events if e["type"] == "tool")
+    assert tool["label"] == "Checked room availability"        # shown under the answer
+    assert tool["progress"] == "Checking room availability…"    # shown while waiting
+
+
+def test_old_lists_are_not_copied_from_history():
+    old_list = "3 bookings found:\n• #46 · Beach Villa · 30 → 31 Oct (1 night) · 2 guests · ₹15,000 · cancelled"
+    sent = qwen.build_messages("sys", [{"role": "assistant", "content": old_list}], "only checked in")
+    assert sent[1]["content"].startswith("3 bookings found:") and "#46" not in sent[1]["content"]
+    normal = qwen.build_messages("sys", [{"role": "assistant", "content": "Check-in is 14:00."}], "x")
+    assert normal[1]["content"] == "Check-in is 14:00."   # other answers are kept as they are

@@ -60,15 +60,16 @@ class Config:
 
     # Local model (used when LLM_PROVIDER=local). Ollama runs as a service, like MySQL.
     OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434").rstrip("/")
-    OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:4b")
+    OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
     # Max seconds to wait for one model call. CPU-only machines are slow (20-60 s per answer).
     OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "180"))
     # How long Ollama keeps the model in RAM after the last chat. Loading it again is slow,
     # so keep it longer than Ollama's default of 5 minutes. Examples: "30m", "2h", "-1" (forever).
     OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
     # How many earlier messages the local model sees. Each one must be re-read on every
-    # answer (slow on CPU), and small models tend to copy old answers instead of using tools.
-    OLLAMA_MAX_HISTORY = int(os.environ.get("OLLAMA_MAX_HISTORY", "6"))
+    # answer (measured: ~300 history tokens = 8-11 s on CPU), and small models copy old
+    # answers instead of using tools. 2 = the last question + answer, enough for follow-ups.
+    OLLAMA_MAX_HISTORY = int(os.environ.get("OLLAMA_MAX_HISTORY", "2"))
     # The model's working memory in tokens. Input beyond this is silently cut from the START
     # (where our rules are), so keep prompt + tools + history well below it. More = more RAM.
     OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "4096"))

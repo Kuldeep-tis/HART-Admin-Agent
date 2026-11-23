@@ -7,6 +7,7 @@ from apps.core.tools.registry import tool
 @tool(
     "get_hotel_info",
     label="Looked up hotel details",
+    progress="Looking up hotel details…",
     description=(
         "Hotel details: address, check-in/check-out times, phone, email, star rating. "
         "For timings, location or contact."
@@ -26,6 +27,7 @@ def get_hotel_info(hotel_id):
 @tool(
     "get_policies",
     label="Checked hotel policies",
+    progress="Checking hotel policies…",
     description=(
         "Hotel policies: cancellation, pets, smoking, payment. For rules, fees or what is allowed."
     ),
@@ -38,6 +40,7 @@ def get_policies(hotel_id):
 @tool(
     "get_room_types",
     label="Looked up room types",
+    progress="Looking up room types…",
     description=(
         "Room types: max guests, price per night (INR), total rooms. Not live availability."
     ),

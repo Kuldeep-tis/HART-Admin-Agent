@@ -29,11 +29,12 @@ from apps.core import tools
 
 logger = logging.getLogger(__name__)
 
-MAX_TURN_CHARS = 2000    # trim very long history messages
+MAX_TURN_CHARS = 500     # trim old messages: on CPU every history token is re-read on each answer (~30 tokens/s)
 TEMPERATURE = 0.2        # low = consistent, factual answers
 MAX_OUTPUT_TOKENS = 1024 # upper limit per reply (Ollama calls this "num_predict")
 MAX_TOOL_ROUNDS = 5      # safety limit on tool-call round trips per answer
 DEFAULT_NUM_CTX = 4096   # the model's working memory in tokens (see OLLAMA_NUM_CTX)
+LIST_ROW = "\n• #"       # a row of a Python-written booking list (booking_tools._render_bookings)
 
 
 class QwenError(Exception):
@@ -80,9 +81,19 @@ def build_messages(system_prompt, history, message):
         role, text = turn.get("role"), turn.get("content")
         if role not in ("user", "assistant") or not isinstance(text, str) or not text.strip():
             continue
-        messages.append({"role": role, "content": text[:MAX_TURN_CHARS]})
+        if role == "assistant" and LIST_ROW in text:
+            # A list Python wrote earlier: keep only its title. Otherwise the model answers
+            # follow-ups ("only the checked-in ones") by filtering old rows instead of the database.
+            text = text.split("\n", 1)[0] + " (shown as a table; look it up again for details)"
+        messages.append({"role": role, "content": text if len(text) <= MAX_TURN_CHARS
+                         else text[:MAX_TURN_CHARS] + "…"})
     messages.append({"role": "user", "content": message})
     return messages
+
+
+def _tool_message(result):
+    """A tool result as compact JSON: no spaces, ₹ kept as one character. Fewer tokens to read."""
+    return json.dumps(result, default=str, separators=(",", ":"), ensure_ascii=False)
 
 
 # ---------- 2. One call to Ollama (streamed) ----------
@@ -190,6 +201,7 @@ def stream_answer(*, system_prompt, history, message, hotel_id, url, model, time
     """Produce Qwen's reply to `message`, yielding events as it goes:
 
         {"type": "token", "text": "..."}    a few more words of the answer
+        {"type": "table", "table": {...}}   the whole answer as a table (written by Python, see tools.table)
         {"type": "tool",  "name": "..."}    a tool is being run (e.g. get_room_types)
         {"type": "reset"}                   forget the words shown so far (see below)
         {"type": "final", "reply": QwenReply}   always the last event
@@ -237,7 +249,16 @@ def stream_answer(*, system_prompt, history, message, hotel_id, url, model, time
             yield {"type": "tool", "name": name}
             result = tools.execute(name, args, hotel_id=hotel_id)  # hotel_id from US, not the AI
             tool_log.append({"name": name, "args": args, "result": result})
-            messages.append({"role": "tool", "tool_name": name, "content": json.dumps(result, default=str)})
+            messages.append({"role": "tool", "tool_name": name, "content": _tool_message(result)})
+
+        # Shortcut: one list-type tool, so Python writes the answer. This skips a whole second
+        # model call (re-reading everything + typing every row), and the numbers are always exact.
+        rendered = tools.render(name, result) if len(calls) == 1 else None
+        if rendered:
+            content = rendered   # the text version is what we store and use as chat history
+            table = tools.table(name, result)
+            yield {"type": "table", "table": table} if table else {"type": "token", "text": rendered}
+            break
     else:
         raise QwenError("The assistant needed too many lookups for this question. Please ask something more specific.")
 

@@ -205,6 +205,7 @@ def respond_stream(agent, message: str, history: list):
     """Like respond(), but yields events while the answer is being written:
 
         {"type": "token", "text": "..."}   more words of the answer
+        {"type": "table", "table": {...}}  the whole answer as a table (local model only)
         {"type": "tool",  "name": "..."}   a database tool is being run
         {"type": "reset"}                  clear the words shown so far
         {"type": "final", "reply": AgentReply}   always the last event
@@ -231,7 +232,7 @@ def _respond_local(agent, message, history):
 def _stream_local(agent, message, history):
     """Answer with the local Qwen model (data never leaves our server), streamed."""
     cfg = current_app.config
-    max_history = cfg.get("OLLAMA_MAX_HISTORY", 6)
+    max_history = cfg.get("OLLAMA_MAX_HISTORY", 2)
     events = qwen.stream_answer(
         system_prompt=system_prompt_for(agent),
         # Only the last few messages: less to read (faster on CPU) and less old text to copy.
