@@ -83,6 +83,14 @@ def test_security_headers(browser):
     assert "script-src 'self'" in h["Content-Security-Policy"]
     assert h["X-Frame-Options"] == "DENY"
     assert h["X-Content-Type-Options"] == "nosniff"
+    assert "microphone=()" in h["Permissions-Policy"]   # blocked by default
+
+
+def test_only_the_chat_preview_may_use_the_microphone(admin, agents):
+    preview = admin.get(f"/dashboard/{agents[2]}/preview/").headers["Permissions-Policy"]
+    assert "microphone=(self)" in preview and "camera=()" in preview   # mic button, own site only
+    other = admin.get(f"/dashboard/{agents[2]}/").headers["Permissions-Policy"]
+    assert "microphone=()" in other
 
 
 def test_pages_embed_csrf_token(admin, agents):

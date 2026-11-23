@@ -24,6 +24,7 @@ os.environ.update({
     "SECRET_KEY": "test-secret",
     "GEMINI_API_KEY": "test-key",
     "APP_ENV": "development",
+    "LLM_PROVIDER": "gemini",   # tests use a fake Gemini, whatever the developer's .env says
 })
 
 from app import create_app  # noqa: E402
@@ -117,6 +118,7 @@ def app(tmp_path):
         "TESTING": True,
         "PLATFORM_DATABASE": str(tmp_path / "platform.db"),
         "HOTEL_DATABASE": str(hotel_db),
+        "LLM_PROVIDER": "gemini",
         "GEMINI_MODEL": "main-model",
         "GEMINI_FALLBACK_MODELS": ["backup-model"],
         "CHAT_MAX_PER_MINUTE": 1000,

@@ -58,4 +58,7 @@ app = create_app()
 
 if __name__ == "__main__":
     # Development server only. In production use gunicorn (see README.md).
-    app.run(debug=app.config["DEBUG"])
+    # use_debugger=False: keep auto-reload, but turn off Werkzeug's in-browser debugger.
+    # That debugger can run Python code, which is dangerous if the app is shared
+    # (e.g. through ngrok). Errors are still printed in the terminal.
+    app.run(debug=app.config["DEBUG"], use_debugger=False)

@@ -40,7 +40,8 @@
               {% if m.status == "error" %}<span class="badge badge-cancelled">AI error</span>{% endif %}
               {% if m.model %}<span>{{ m.model }}</span>{% endif %}
               {% if m.input_tokens is not none %}<span title="input tokens → output tokens">{{ m.input_tokens }} → {{ m.output_tokens }} tokens</span>{% endif %}
-              {% if m.latency_ms is not none %}<span>{{ "%.1f" % (m.latency_ms / 1000) }} s</span>{% endif %}
+              {% if m.first_token_ms is not none %}<span title="Time until the first words appeared">first words {{ "%.1f" % (m.first_token_ms / 1000) }} s</span>{% endif %}
+              {% if m.latency_ms is not none %}<span title="Time until the reply was complete">{% if m.first_token_ms is not none %}total {% endif %}{{ "%.1f" % (m.latency_ms / 1000) }} s</span>{% endif %}
               {% if loop.first and m.role == "assistant" %}<span>greeting</span>{% endif %}
             </div>
           </div>
@@ -67,6 +68,7 @@
       <dl class="meta-list">
         <dt>Messages</dt><dd>{{ conversation.message_count }}</dd>
         <dt>Tokens used</dt><dd>{{ "{:,}".format(totals.tokens) }}</dd>
+        <dt>Avg. first words</dt><dd>{{ "%.1f s" % (totals.avg_first_token_ms / 1000) if totals.avg_first_token_ms else "—" }}</dd>
         <dt>Avg. reply time</dt><dd>{{ "%.1f s" % (totals.avg_latency_ms / 1000) if totals.avg_latency_ms else "—" }}</dd>
         <dt>AI errors</dt><dd>{{ totals.errors }}</dd>
       </dl>

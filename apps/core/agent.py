@@ -3,7 +3,11 @@
 The platform talks to the agent ONLY through respond(). Everything about how
 the answer is produced (prompt, model, tools, later LangGraph) lives here.
 
-How one answer is produced (the "tool loop"):
+Which AI answers is set by LLM_PROVIDER in .env:
+  "gemini" = Google's cloud API (the code below)
+  "local"  = Qwen on our own machine via Ollama (apps/core/models/qwen.py)
+
+How one answer is produced with Gemini (the "tool loop"):
   1. Send Gemini: system prompt (no hotel data) + conversation + list of tools.
   2. Gemini either answers with text (done), or asks to call tools.
   3. We run the requested tools on hotel_info.db FOR THIS AGENT'S HOTEL ONLY,
@@ -11,6 +15,7 @@ How one answer is produced (the "tool loop"):
 """
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -20,6 +25,7 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 from apps.core import prompts, tools
+from apps.core.models import qwen
 from apps.core.services import hotel_service
 
 logger = logging.getLogger(__name__)
@@ -150,6 +156,12 @@ def respond(agent, message: str, history: list) -> AgentReply:
     message: the latest user message.
     history: earlier turns [{"role": "user" | "assistant", "content": "..."}] (from the DB).
     """
+    provider = current_app.config.get("LLM_PROVIDER", "gemini")
+    if provider == "local":
+        return _respond_local(agent, message, history)
+    if provider != "gemini":
+        raise AgentError(f"Unknown LLM_PROVIDER '{provider}' in .env. Use 'gemini' or 'local'.")
+
     client = _get_client()
     config = types.GenerateContentConfig(
         system_instruction=system_prompt_for(agent),
@@ -168,6 +180,82 @@ def respond(agent, message: str, history: list) -> AgentReply:
         except ModelUnavailable as exc:
             last_error = exc
     raise last_error
+
+
+def warm_up(agent):
+    """Local model only: pre-read this agent's system prompt + tools in the background,
+    so the guest's first question starts faster. Returns immediately."""
+    cfg = current_app.config
+    if cfg.get("LLM_PROVIDER") != "local":
+        return
+    try:
+        system_prompt = system_prompt_for(agent)   # needs the database, so build it now
+    except AgentError:
+        return
+    threading.Thread(
+        target=qwen.warm_up, daemon=True,
+        kwargs=dict(system_prompt=system_prompt, url=cfg["OLLAMA_URL"], model=cfg["OLLAMA_MODEL"],
+                    keep_alive=cfg.get("OLLAMA_KEEP_ALIVE", "30m"),
+                    num_ctx=cfg.get("OLLAMA_NUM_CTX", qwen.DEFAULT_NUM_CTX),
+                    timeout=cfg["OLLAMA_TIMEOUT"]),
+    ).start()
+
+
+def respond_stream(agent, message: str, history: list):
+    """Like respond(), but yields events while the answer is being written:
+
+        {"type": "token", "text": "..."}   more words of the answer
+        {"type": "table", "table": {...}}  the whole answer as a table (local model only)
+        {"type": "tool",  "name": "..."}   a database tool is being run
+        {"type": "reset"}                  clear the words shown so far
+        {"type": "final", "reply": AgentReply}   always the last event
+
+    Raises AgentError (possibly after some events) when the answer fails.
+    """
+    if current_app.config.get("LLM_PROVIDER", "gemini") == "local":
+        yield from _stream_local(agent, message, history)
+        return
+    # Gemini isn't streamed yet: send the whole answer as one piece.
+    reply = respond(agent, message, history)
+    yield {"type": "token", "text": reply.text}
+    yield {"type": "final", "reply": reply}
+
+
+def _respond_local(agent, message, history):
+    """Answer with the local Qwen model and wait for the whole reply."""
+    for event in _stream_local(agent, message, history):
+        if event["type"] == "final":
+            return event["reply"]
+    raise AgentError("The AI returned an empty reply. Please try rephrasing your question.")
+
+
+def _stream_local(agent, message, history):
+    """Answer with the local Qwen model (data never leaves our server), streamed."""
+    cfg = current_app.config
+    max_history = cfg.get("OLLAMA_MAX_HISTORY", 2)
+    events = qwen.stream_answer(
+        system_prompt=system_prompt_for(agent),
+        # Only the last few messages: less to read (faster on CPU) and less old text to copy.
+        history=history[-max_history:] if max_history > 0 else [],
+        message=message,
+        hotel_id=agent["hotel_id"],   # from the agent's row, never from the AI
+        url=cfg["OLLAMA_URL"],
+        model=cfg["OLLAMA_MODEL"],
+        timeout=cfg["OLLAMA_TIMEOUT"],
+        keep_alive=cfg.get("OLLAMA_KEEP_ALIVE", "30m"),
+        num_ctx=cfg.get("OLLAMA_NUM_CTX", qwen.DEFAULT_NUM_CTX),
+    )
+    try:
+        for event in events:
+            if event["type"] == "final":
+                r = event["reply"]   # Qwen's reply -> our app's AgentReply
+                event = {"type": "final", "reply": AgentReply(
+                    text=r.text, model=r.model, input_tokens=r.input_tokens,
+                    output_tokens=r.output_tokens, tool_calls=r.tool_calls,
+                )}
+            yield event
+    except qwen.QwenError as exc:
+        raise AgentError(str(exc)) from exc   # the route already shows AgentError messages
 
 
 def _answer_with(client, agent, model, config, contents):

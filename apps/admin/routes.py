@@ -2,7 +2,8 @@ import json
 import time
 
 from flask import (
-    Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, session, url_for,
+    Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template, request, session,
+    stream_with_context, url_for,
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -172,10 +173,15 @@ def agent_preview(agent_id):
     agent = _get_agent_or_404(agent_id)
     hotel = hotel_service.get_hotel(agent["hotel_id"])
     rooms = hotel_service.get_room_types(agent["hotel_id"]) if hotel else []
-    return render_template(
+    hotel_agent.warm_up(agent)   # local model: pre-read prompt + tools while the page loads
+    response = Response(render_template(
         "preview.html", agent=agent, hotel=hotel, rooms=rooms,
         greeting=hotel_agent.greeting_for(agent, hotel),
-    )
+    ))
+    # The chat's mic button needs the microphone. Every other page keeps it blocked
+    # (helpers/security.py only sets its stricter default when a page sets none).
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
+    return response
 
 
 @admin_bp.route("/dashboard/<int:agent_id>/preview/chat", methods=["POST"])
@@ -183,8 +189,9 @@ def agent_preview(agent_id):
 def agent_preview_chat(agent_id):
     """JSON API for the chat widget.
 
-    Request:  {message, session_id?, guest_id?}
+    Request:  {message, session_id?, guest_id?, stream?}
     Response: {reply, session_id, guest_id}   (or {error, session_id, guest_id})
+              With "stream": true, the reply is sent word by word instead (see _stream_reply).
 
     The conversation history is read from the DATABASE, never from the browser.
     """
@@ -215,6 +222,9 @@ def agent_preview_chat(agent_id):
     history = conversation_service.get_history(conversation["id"], MAX_HISTORY_TURNS)
     conversation_service.add_message(conversation["id"], "user", message)
 
+    if data.get("stream"):
+        return _stream_reply(agent, conversation, message, history, ids)
+
     # 3. Ask the agent and store the answer (or the failure).
     started = time.perf_counter()
     try:
@@ -235,12 +245,96 @@ def agent_preview_chat(agent_id):
     return jsonify(reply=reply.text, tools=list(dict.fromkeys(used)), **ids)
 
 
+def _stream_reply(agent, conversation, message, history, ids):
+    """Send the answer while it is being written, as NDJSON (one JSON object per line):
+
+        {"type": "token", "text": "Check-in"}           more words
+        {"type": "table", "table": {"title", "columns", "rows"}}   the answer as a table
+        {"type": "tool", "label": "Checked hotel info", "progress": "Looking up hotel details…"}
+                                                         a database lookup is running
+        {"type": "reset"}                                clear the words shown so far
+        {"type": "done", "tools": [...], "session_id": ..., "guest_id": ...}
+        {"type": "error", "error": "...", "session_id": ..., "guest_id": ...}
+
+    The answer (or the failure) is stored in the database at the end, like the JSON mode.
+    """
+    def line(obj):
+        return json.dumps(obj) + "\n"
+
+    def ms_since(start):
+        return int((time.perf_counter() - start) * 1000)
+
+    def events():
+        started = time.perf_counter()
+        first_token_ms = None   # when the guest saw the first words
+        reply = None
+        try:
+            for event in hotel_agent.respond_stream(agent, message, history):
+                if event["type"] == "final":
+                    reply = event["reply"]
+                elif event["type"] == "tool":
+                    tool = hotel_tools.TOOLS.get(event["name"])
+                    yield line({"type": "tool", "label": tool.label if tool else "Looked up hotel data",
+                                "progress": tool.progress if tool else "Looking up hotel data…"})
+                else:
+                    if event["type"] in ("token", "table") and first_token_ms is None:
+                        first_token_ms = ms_since(started)
+                    yield line(event)   # token / table / reset
+        except GeneratorExit:
+            # The browser stopped listening (page refreshed or closed, network dropped).
+            # Store that, so the question doesn't sit in the transcript without any reply.
+            conversation_service.add_message(
+                conversation["id"], "assistant", "The reply was cancelled: the chat page was closed or refreshed.",
+                status="error", latency_ms=ms_since(started), first_token_ms=first_token_ms,
+            )
+            raise
+        except Exception as exc:  # AgentError, or a bug: the stream has started, so report it as an event
+            if isinstance(exc, hotel_agent.AgentError):
+                error = str(exc)
+            else:
+                current_app.logger.exception("Streaming reply failed for agent %s", agent["id"])
+                error = "Something went wrong on the server. Please try again."
+            conversation_service.add_message(
+                conversation["id"], "assistant", error, status="error",
+                latency_ms=ms_since(started), first_token_ms=first_token_ms,
+            )
+            yield line({"type": "error", "error": error, **ids})
+            return
+
+        conversation_service.add_message(
+            conversation["id"], "assistant", reply.text, model=reply.model,
+            input_tokens=reply.input_tokens, output_tokens=reply.output_tokens,
+            latency_ms=ms_since(started), tool_calls=reply.tool_calls, first_token_ms=first_token_ms,
+        )
+        used = [hotel_tools.TOOLS[c["name"]].label for c in reply.tool_calls if c["name"] in hotel_tools.TOOLS]
+        yield line({"type": "done", "tools": list(dict.fromkeys(used)), **ids})
+
+    # stream_with_context: keeps the request (login, database connection) available while streaming.
+    # X-Accel-Buffering: tells nginx not to hold the lines back until the end.
+    return Response(
+        stream_with_context(events()), mimetype="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 def _tool_labels(tool_calls_json):
     """Stored JSON -> unique human labels, e.g. ["Checked room availability"]."""
     if not tool_calls_json:
         return []
     names = [c.get("name") for c in json.loads(tool_calls_json)]
     return list(dict.fromkeys(hotel_tools.TOOLS[n].label for n in names if n in hotel_tools.TOOLS))
+
+
+def _table_for(tool_calls_json, content):
+    """Rebuild the table of a Python-written answer from its stored tool result (None otherwise).
+    Only when the stored text IS that tool's rendered answer, so model-written replies stay text."""
+    calls = json.loads(tool_calls_json) if tool_calls_json else []
+    if len(calls) != 1:
+        return None
+    name, result = calls[0].get("name"), calls[0].get("result") or {}
+    if hotel_tools.render(name, result) != content:
+        return None
+    return hotel_tools.table(name, result)
 
 
 @admin_bp.route("/dashboard/<int:agent_id>/preview/history")
@@ -254,7 +348,7 @@ def agent_preview_history(agent_id):
         return jsonify(error="Conversation not found."), 404
     messages = [
         {"role": m["role"], "content": m["content"], "status": m["status"], "created_at": m["created_at"],
-         "tools": _tool_labels(m["tool_calls"])}
+         "tools": _tool_labels(m["tool_calls"]), "table": _table_for(m["tool_calls"], m["content"])}
         for m in conversation_service.get_messages(conversation["id"])
     ]
     return jsonify(session_id=conversation["session_id"], messages=messages)
@@ -269,9 +363,11 @@ def conversation_detail(agent_id, conversation_id):
         abort(404)  # never show another agent's conversation
     messages = conversation_service.get_messages(conversation_id)
     answers = [m for m in messages if m["role"] == "assistant" and m["latency_ms"] is not None]
+    streamed = [m for m in answers if m["first_token_ms"] is not None]
     totals = {
         "tokens": sum((m["input_tokens"] or 0) + (m["output_tokens"] or 0) for m in messages),
         "avg_latency_ms": int(sum(m["latency_ms"] for m in answers) / len(answers)) if answers else None,
+        "avg_first_token_ms": int(sum(m["first_token_ms"] for m in streamed) / len(streamed)) if streamed else None,
         "errors": sum(1 for m in messages if m["status"] == "error"),
     }
     return render_template(
