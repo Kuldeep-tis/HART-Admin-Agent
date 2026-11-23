@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from apps.core.services import booking_service
 from apps.core.tools.registry import ToolInputError, check_range, parse_date, tool
 
-DATE = {"type": "string", "description": "Date in YYYY-MM-DD format."}
+DATE = {"type": "string", "description": "YYYY-MM-DD"}
 STATUSES = ["confirmed", "checked_in", "checked_out", "cancelled"]
 
 
@@ -13,9 +13,8 @@ STATUSES = ["confirmed", "checked_in", "checked_out", "cancelled"]
     "check_room_availability",
     label="Checked room availability",
     description=(
-        "Check how many rooms of each type are free for a stay. check_in is the arrival date, "
-        "check_out the departure date (defaults to the day after check_in). "
-        "Use for 'is a room available', 'how many rooms are free tonight/next weekend'."
+        "Free rooms per type for a stay (check_out defaults to the day after check_in). "
+        "For 'is a room available', 'rooms free tonight'."
     ),
     parameters={
         "type": "object",
@@ -39,10 +38,8 @@ def check_room_availability(hotel_id, check_in=None, check_out=None):
     "get_occupancy",
     label="Checked occupancy and check-ins",
     description=(
-        "Get occupancy for one night: rooms occupied, guests staying, occupancy percent, arrivals and "
-        "departures that day, plus how many bookings and guests are currently checked in. "
-        "Use for 'how many guests are in the hotel', 'how many checked in', 'occupancy rate', 'arrivals today'. "
-        "date defaults to today."
+        "One night's occupancy: rooms occupied, guests, occupancy %, arrivals, departures, "
+        "currently checked in. date defaults to today."
     ),
     parameters={"type": "object", "properties": {"date": DATE}},
 )
@@ -55,9 +52,8 @@ def get_occupancy(hotel_id, date=None):
     "get_booking_summary",
     label="Summarised bookings",
     description=(
-        "Summarise bookings whose check-in date is between start_date and end_date (inclusive): totals by "
-        "status, revenue (INR, excluding cancellations), guests, average nights, cancellation rate and a "
-        "breakdown per room type. Use for 'bookings this month', 'revenue last week', 'cancellation rate'."
+        "Totals for bookings checking in between start_date and end_date: counts by status, "
+        "revenue (INR), guests, cancellation rate, per room type."
     ),
     parameters={
         "type": "object",
@@ -76,10 +72,8 @@ def get_booking_summary(hotel_id, start_date=None, end_date=None):
     "list_bookings",
     label="Listed bookings",
     description=(
-        "List individual bookings (booking id, room type, dates, nights, number of guests, amount, status), "
-        "newest check-in first. Optional filters: status, and a check-in date range. "
-        "Guest names and contact details are NOT available. Use for 'which bookings are cancelled', "
-        "'show upcoming bookings'."
+        "List bookings (id, room type, dates, guests, amount, status), newest first. "
+        "Filters: status, check-in date range. No guest names."
     ),
     parameters={
         "type": "object",
@@ -87,7 +81,7 @@ def get_booking_summary(hotel_id, start_date=None, end_date=None):
             "status": {"type": "string", "enum": STATUSES},
             "start_date": DATE,
             "end_date": DATE,
-            "limit": {"type": "integer", "description": "How many to return (1-20, default 10)."},
+            "limit": {"type": "integer", "description": "1-20, default 10"},
         },
     },
 )

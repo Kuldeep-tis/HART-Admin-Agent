@@ -173,6 +173,7 @@ def agent_preview(agent_id):
     agent = _get_agent_or_404(agent_id)
     hotel = hotel_service.get_hotel(agent["hotel_id"])
     rooms = hotel_service.get_room_types(agent["hotel_id"]) if hotel else []
+    hotel_agent.warm_up(agent)   # local model: pre-read prompt + tools while the page loads
     return render_template(
         "preview.html", agent=agent, hotel=hotel, rooms=rooms,
         greeting=hotel_agent.greeting_for(agent, hotel),

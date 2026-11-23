@@ -68,6 +68,7 @@ class FakeOllama:
 def ollama(app, monkeypatch):
     fake = FakeOllama()
     monkeypatch.setattr(qwen.requests, "post", fake.post)
+    monkeypatch.setattr(qwen, "_warmed_at", {})   # each test starts with nothing warmed
     app.config["LLM_PROVIDER"] = "local"
     return fake
 
@@ -222,3 +223,58 @@ def test_conversation_page_shows_first_words_time(app, admin, agents, ollama):
             conversation_service.get_or_create_guest(events[-1]["guest_id"])["id"])
     page = admin.get(f"/dashboard/{agents[2]}/conversations/{conv['id']}/").get_data(as_text=True)
     assert "first words" in page and "Avg. first words" in page
+
+
+# ---------- speed settings: history, num_ctx, warm-up ----------
+
+def test_only_recent_history_is_sent(app, admin, agents, ollama):
+    app.config["OLLAMA_MAX_HISTORY"] = 2
+    first = admin.chat(agents[2], "Q1").get_json()
+    ids = {"session_id": first["session_id"], "guest_id": first["guest_id"]}
+    admin.chat(agents[2], "Q2", **ids)
+    admin.chat(agents[2], "Q3", **ids)
+    sent = [m["content"] for m in ollama.payloads[-1]["messages"][1:]]   # skip the system prompt
+    assert sent == ["Q2", "Fake local answer.", "Q3"]                    # last 2 history messages + new one
+
+
+def test_num_ctx_is_sent(app, admin, agents, ollama):
+    app.config["OLLAMA_NUM_CTX"] = 8192
+    admin.chat(agents[2], "hi")
+    assert ollama.payloads[-1]["options"]["num_ctx"] == 8192
+
+
+def test_warm_up_matches_the_real_chat_request(app, ollama):
+    # Same tools and options, or Ollama's cache can't be reused (or the model reloads).
+    with app.app_context():
+        qwen.warm_up(system_prompt="sys", url="u", model="m", num_ctx=4096)
+        ask(system_prompt="sys", model="m")
+    warm, real = ollama.payloads
+    assert warm["tools"] == real["tools"] and warm["messages"][0] == real["messages"][0]
+    assert warm["options"]["num_ctx"] == real["options"]["num_ctx"] and warm["options"]["num_predict"] == 1
+
+
+def test_same_prompt_is_not_warmed_twice(ollama):
+    # Refreshing the preview page must not queue warm-ups in front of real questions.
+    for _ in range(3):
+        qwen.warm_up(system_prompt="sys", url="u", model="m")
+    qwen.warm_up(system_prompt="other agent", url="u", model="m")
+    assert len(ollama.payloads) == 2
+
+
+def test_warm_up_never_raises(ollama):
+    ollama.replies = [requests.ConnectionError()]
+    qwen.warm_up(system_prompt="s", url="u", model="m")   # no exception
+
+
+@pytest.mark.parametrize("provider, warmed", [("local", True), ("gemini", False)])
+def test_preview_page_warms_up_only_for_local(app, admin, agents, monkeypatch, provider, warmed):
+    calls = []
+    monkeypatch.setattr(qwen, "warm_up", lambda **kw: calls.append(kw))
+    app.config["LLM_PROVIDER"] = provider
+    assert admin.get(f"/dashboard/{agents[2]}/preview/").status_code == 200
+    import time
+    for _ in range(50):          # the warm-up runs in a background thread
+        if calls:
+            break
+        time.sleep(0.01)
+    assert bool(calls) is warmed

@@ -66,6 +66,12 @@ class Config:
     # How long Ollama keeps the model in RAM after the last chat. Loading it again is slow,
     # so keep it longer than Ollama's default of 5 minutes. Examples: "30m", "2h", "-1" (forever).
     OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "30m")
+    # How many earlier messages the local model sees. Each one must be re-read on every
+    # answer (slow on CPU), and small models tend to copy old answers instead of using tools.
+    OLLAMA_MAX_HISTORY = int(os.environ.get("OLLAMA_MAX_HISTORY", "6"))
+    # The model's working memory in tokens. Input beyond this is silently cut from the START
+    # (where our rules are), so keep prompt + tools + history well below it. More = more RAM.
+    OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "4096"))
 
     # Gemini (used when LLM_PROVIDER=gemini)
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")

@@ -15,9 +15,12 @@ This file knows nothing about Flask or our database: everything it needs is
 passed in, which keeps it easy to test.
 """
 
+import hashlib
 import json
 import logging
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 
 import requests
@@ -30,6 +33,7 @@ MAX_TURN_CHARS = 2000    # trim very long history messages
 TEMPERATURE = 0.2        # low = consistent, factual answers
 MAX_OUTPUT_TOKENS = 1024 # upper limit per reply (Ollama calls this "num_predict")
 MAX_TOOL_ROUNDS = 5      # safety limit on tool-call round trips per answer
+DEFAULT_NUM_CTX = 4096   # the model's working memory in tokens (see OLLAMA_NUM_CTX)
 
 
 class QwenError(Exception):
@@ -83,7 +87,56 @@ def build_messages(system_prompt, history, message):
 
 # ---------- 2. One call to Ollama (streamed) ----------
 
-def _chat_stream(url, model, messages, timeout, keep_alive):
+def _payload(model, messages, keep_alive, num_ctx, stream=True, max_tokens=MAX_OUTPUT_TOKENS):
+    """The request body for Ollama's /api/chat.
+
+    Warm-up and real chats must send the same tools and the same num_ctx: a different
+    num_ctx makes Ollama reload the model, and different tools break the cache.
+    """
+    return {
+        "model": model,
+        "messages": messages,
+        "tools": tool_definitions(),
+        "stream": stream,  # send words as they are written, so the guest sees progress
+        "think": False,    # no "thinking" text: 5-10x faster, not needed for our simple tasks
+        "keep_alive": keep_alive,  # keep the model in RAM between chats (loading it is slow)
+        "options": {"temperature": TEMPERATURE, "num_predict": max_tokens, "num_ctx": num_ctx},
+    }
+
+
+WARM_UP_EVERY_SECONDS = 600     # don't warm the same prompt again within 10 minutes
+_warm_lock = threading.Lock()   # only one warm-up at a time: on CPU Ollama answers one request at a time
+_warmed_at = {}                 # (url, model, prompt hash) -> time of the last warm-up
+
+
+def warm_up(*, system_prompt, url, model, keep_alive="30m", num_ctx=DEFAULT_NUM_CTX, timeout=180):
+    """Make Ollama read the system prompt and tools now, before the guest asks anything.
+
+    Ollama remembers (caches) the start of recent inputs. Every chat starts with the
+    same system prompt + tools (~1,000+ tokens), so after a warm-up the first real
+    question skips re-reading them (measured: 0.8 s instead of ~5 s on CPU).
+
+    Skipped when another warm-up is running or this prompt was warmed recently, so
+    refreshing the page doesn't queue up warm-ups in front of real questions.
+    Best effort: any problem is only logged.
+    """
+    key = (url, model, hashlib.sha256(system_prompt.encode()).hexdigest())
+    if time.monotonic() - _warmed_at.get(key, -WARM_UP_EVERY_SECONDS) < WARM_UP_EVERY_SECONDS:
+        return
+    if not _warm_lock.acquire(blocking=False):
+        return
+    try:
+        _warmed_at[key] = time.monotonic()
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "hi"}]
+        requests.post(f"{url}/api/chat", timeout=timeout,
+                      json=_payload(model, messages, keep_alive, num_ctx, stream=False, max_tokens=1))
+    except requests.RequestException as exc:
+        logger.info("Ollama warm-up skipped: %s", exc)
+    finally:
+        _warm_lock.release()
+
+
+def _chat_stream(url, model, messages, timeout, keep_alive, num_ctx=DEFAULT_NUM_CTX):
     """Send the conversation to Ollama once; yield its reply piece by piece.
 
     With "stream": true Ollama sends one JSON object per line as the model writes:
@@ -93,15 +146,7 @@ def _chat_stream(url, model, messages, timeout, keep_alive):
         {"message": {"content": ""}, "done": true, "prompt_eval_count": 2998, "eval_count": 49}
     A request to run tools arrives as "message": {"tool_calls": [...]}.
     """
-    payload = {
-        "model": model,
-        "messages": messages,
-        "tools": tool_definitions(),
-        "stream": True,    # send words as they are written, so the guest sees progress
-        "think": False,    # no "thinking" text: 5-10x faster, not needed for our simple tasks
-        "keep_alive": keep_alive,  # keep the model in RAM between chats (loading it is slow)
-        "options": {"temperature": TEMPERATURE, "num_predict": MAX_OUTPUT_TOKENS},
-    }
+    payload = _payload(model, messages, keep_alive, num_ctx)
     try:
         # timeout = max seconds to connect and max seconds of silence between two pieces.
         resp = requests.post(f"{url}/api/chat", json=payload, timeout=timeout, stream=True)
@@ -140,7 +185,8 @@ def _chat_stream(url, model, messages, timeout, keep_alive):
 
 # ---------- 3. The tool loop ----------
 
-def stream_answer(*, system_prompt, history, message, hotel_id, url, model, timeout, keep_alive="30m"):
+def stream_answer(*, system_prompt, history, message, hotel_id, url, model, timeout, keep_alive="30m",
+                  num_ctx=DEFAULT_NUM_CTX):
     """Produce Qwen's reply to `message`, yielding events as it goes:
 
         {"type": "token", "text": "..."}    a few more words of the answer
@@ -155,7 +201,7 @@ def stream_answer(*, system_prompt, history, message, hotel_id, url, model, time
 
     for _ in range(MAX_TOOL_ROUNDS + 1):
         content, calls = "", []
-        for chunk in _chat_stream(url, model, messages, timeout, keep_alive):
+        for chunk in _chat_stream(url, model, messages, timeout, keep_alive, num_ctx):
             piece = (chunk.get("message") or {}).get("content") or ""
             if piece:
                 content += piece
@@ -164,6 +210,10 @@ def stream_answer(*, system_prompt, history, message, hotel_id, url, model, time
             if chunk.get("done"):
                 input_tokens += chunk.get("prompt_eval_count") or 0
                 output_tokens += chunk.get("eval_count") or 0
+                if (chunk.get("prompt_eval_count") or 0) >= num_ctx * 0.9:
+                    logger.warning("Input (%s tokens) is close to num_ctx=%s: the start may be cut off. "
+                                   "Lower OLLAMA_MAX_HISTORY or raise OLLAMA_NUM_CTX.",
+                                   chunk.get("prompt_eval_count"), num_ctx)
 
         if not calls:
             break  # Qwen answered with text

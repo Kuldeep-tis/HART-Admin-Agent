@@ -15,6 +15,7 @@ How one answer is produced with Gemini (the "tool loop"):
 """
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -181,6 +182,25 @@ def respond(agent, message: str, history: list) -> AgentReply:
     raise last_error
 
 
+def warm_up(agent):
+    """Local model only: pre-read this agent's system prompt + tools in the background,
+    so the guest's first question starts faster. Returns immediately."""
+    cfg = current_app.config
+    if cfg.get("LLM_PROVIDER") != "local":
+        return
+    try:
+        system_prompt = system_prompt_for(agent)   # needs the database, so build it now
+    except AgentError:
+        return
+    threading.Thread(
+        target=qwen.warm_up, daemon=True,
+        kwargs=dict(system_prompt=system_prompt, url=cfg["OLLAMA_URL"], model=cfg["OLLAMA_MODEL"],
+                    keep_alive=cfg.get("OLLAMA_KEEP_ALIVE", "30m"),
+                    num_ctx=cfg.get("OLLAMA_NUM_CTX", qwen.DEFAULT_NUM_CTX),
+                    timeout=cfg["OLLAMA_TIMEOUT"]),
+    ).start()
+
+
 def respond_stream(agent, message: str, history: list):
     """Like respond(), but yields events while the answer is being written:
 
@@ -211,15 +231,18 @@ def _respond_local(agent, message, history):
 def _stream_local(agent, message, history):
     """Answer with the local Qwen model (data never leaves our server), streamed."""
     cfg = current_app.config
+    max_history = cfg.get("OLLAMA_MAX_HISTORY", 6)
     events = qwen.stream_answer(
         system_prompt=system_prompt_for(agent),
-        history=history,
+        # Only the last few messages: less to read (faster on CPU) and less old text to copy.
+        history=history[-max_history:] if max_history > 0 else [],
         message=message,
         hotel_id=agent["hotel_id"],   # from the agent's row, never from the AI
         url=cfg["OLLAMA_URL"],
         model=cfg["OLLAMA_MODEL"],
         timeout=cfg["OLLAMA_TIMEOUT"],
         keep_alive=cfg.get("OLLAMA_KEEP_ALIVE", "30m"),
+        num_ctx=cfg.get("OLLAMA_NUM_CTX", qwen.DEFAULT_NUM_CTX),
     )
     try:
         for event in events:
