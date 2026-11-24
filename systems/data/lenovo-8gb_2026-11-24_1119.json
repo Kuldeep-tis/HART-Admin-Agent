@@ -1,6 +1,6 @@
 {
   "name": "lenovo-8gb",
-  "date": "2026-11-24 11:05",
+  "date": "2026-11-24 11:19",
   "system": {
     "hostname": "tis-20-Lenovo-V15-IIL",
     "machine": "Lenovo V15-IIL",
@@ -12,12 +12,12 @@
       "Intel Corporation Iris Plus Graphics G1 (Ice Lake) (rev 07)"
     ],
     "ram_total_gb": 7.6,
-    "ram_free_gb": 3.5,
+    "ram_free_gb": 3.7,
     "swap_total_gb": 46.6,
-    "swap_used_gb": 1.9,
+    "swap_used_gb": 2.4,
     "disk_total_gb": 136.4,
     "disk_free_gb": 28.4,
-    "power": "battery",
+    "power": "charger",
     "os": "Ubuntu 24.04.5 LTS (kernel 7.0.0-43-generic)",
     "python": "3.12.3",
     "ollama": "0.40.16"
@@ -31,11 +31,11 @@
       "gpu_percent": 0,
       "runs_on": "CPU only",
       "raw": {
-        "cold_load_s": 9.5,
-        "ollama_load_s": 7.9,
-        "read_tokens_per_s": 32.2,
-        "write_tokens_per_s": 6.1,
-        "words_per_s": 4.6
+        "cold_load_s": 9.1,
+        "ollama_load_s": 7.4,
+        "read_tokens_per_s": 25.6,
+        "write_tokens_per_s": 4.8,
+        "words_per_s": 3.6
       },
       "questions": [
         {
@@ -47,8 +47,8 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 7.6,
-          "total_s": 9.6,
+          "first_s": 8.6,
+          "total_s": 10.7,
           "answer": "Check-in time is at 14:00."
         },
         {
@@ -60,8 +60,8 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 8.0,
-          "total_s": 22.6,
+          "first_s": 10.4,
+          "total_s": 28.4,
           "answer": "We have the following room types at Seaside Retreat: \n\n- Garden View: Maximum 2 guests, costs ₹4500 per night, with 25 rooms available.\n- Sea View: Maximum 2 guests, costs ₹7000 per night, with 15 rooms available.\n- Beach Villa: Maximum 4 guests, costs ₹15000 per night, with 5 rooms available."
         },
         {
@@ -73,8 +73,8 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 6.6,
-          "total_s": 9.3,
+          "first_s": 9.9,
+          "total_s": 13.3,
           "answer": "Pets are allowed for a fee of 1,000 per night."
         },
         {
@@ -86,9 +86,9 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 6.6,
-          "total_s": 13.5,
-          "answer": "Our cancellation policy is non-refundable within 7 days of arrival. Pets are allowed for a fee of 1,000 per night. Smoking is not allowed indoors."
+          "first_s": 8.0,
+          "total_s": 16.0,
+          "answer": "Our cancellation policy is non-refundable within 7 days of arrival. Pets are allowed for a fee of 1,000 per night. No smoking indoors."
         },
         {
           "question": "How many rooms are free tomorrow?",
@@ -99,8 +99,8 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 16.3,
-          "total_s": 21.8,
+          "first_s": 21.2,
+          "total_s": 26.8,
           "answer": "There are 24 rooms of type Garden View, 15 rooms of type Sea View, and 5 Beach Villa rooms available for booking tomorrow."
         },
         {
@@ -112,8 +112,8 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 7.1,
-          "total_s": 9.5,
+          "first_s": 7.9,
+          "total_s": 10.4,
           "answer": "Currently, there are 2 guests checked in at Seaside Retreat."
         },
         {
@@ -125,9 +125,9 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 17.6,
-          "total_s": 35.1,
-          "answer": "Our revenue for this month so far is ₹99,000.0. We have 11 guests, with an average of 2 nights per booking. No cancellations have occurred. The breakdown by room type is as follows: Garden View has 3 bookings for ₹27,000.0, Beach Villa has 2 bookings for ₹30,000.0, and Sea View has 2 bookings for ₹42,000.0."
+          "first_s": 19.2,
+          "total_s": 34.3,
+          "answer": "Our revenue for this month so far is ₹99,000.0. We have 11 guests, with an average of 2 nights per booking. There are no cancellations. The breakdown by room type is as follows: Garden View rooms have generated ₹27,000.0, Beach Villa rooms ₹30,000.0, and Sea View rooms ₹42,000.0."
         },
         {
           "question": "Show the cancelled bookings.",
@@ -138,8 +138,8 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 5.1,
-          "total_s": 5.1,
+          "first_s": 4.3,
+          "total_s": 4.3,
           "answer": "3 bookings found:\n• #46 · Beach Villa · 30 → 31 Oct (1 night) · 2 guests · ₹15,000 · cancelled\n• #48 · Beach Villa · 20 → 24 Oct (4 nights) · 2 guests · ₹60,000 · cancelled\n• #36 · Sea View · 14 → 15 Oct (1 night) · 2 guests · ₹7,000 · cancelled"
         },
         {
@@ -151,20 +151,20 @@
           "tool_ok": true,
           "answer_ok": true,
           "made_up": null,
-          "first_s": 8.1,
-          "total_s": 11.2,
-          "answer": "I don't have that information. Swimming pool is not mentioned in the hotel policies."
+          "first_s": 6.9,
+          "total_s": 9.4,
+          "answer": "I don't have that information. Swimming pool is not mentioned in the policies."
         }
       ],
       "summary": {
         "right_tool": 9,
         "right_answer": 9,
         "n_questions": 9,
-        "avg_first_s": 9.2,
-        "avg_total_s": 15.3,
-        "max_first_s": 17.6,
-        "chat_avg_first_s": 7.5,
-        "chat_avg_total_s": 12.6,
+        "avg_first_s": 10.7,
+        "avg_total_s": 17.1,
+        "max_first_s": 21.2,
+        "chat_avg_first_s": 7.1,
+        "chat_avg_total_s": 11.9,
         "chat_errors": 0
       },
       "chats": [
@@ -172,8 +172,8 @@
           "chat": "Sales check",
           "question": "hi",
           "tools": [],
-          "first_s": 0.7,
-          "total_s": 3.2,
+          "first_s": 0.6,
+          "total_s": 3.0,
           "error": false,
           "answer": "Hello! How can I assist you with the Seaside Retreat today?"
         },
@@ -183,26 +183,26 @@
           "tools": [
             "get_booking_summary"
           ],
-          "first_s": 15.3,
-          "total_s": 34.0,
+          "first_s": 16.0,
+          "total_s": 33.7,
           "error": false,
-          "answer": "Last month's sales at Seaside Retreat were ₹99,000. There were 11 guests, with a cancellation rate of 0%. The breakdown by room type is as follows: \n- Garden View rooms had 3 bookings for a revenue of ₹27,000.\n- Beach Villa rooms had 2 bookings for a revenue of ₹30,000.\n- Sea View rooms had 2 bookings for a revenue of ₹42,000."
+          "answer": "Last month's sales at Seaside Retreat amounted to ₹2,44,000. There were 15 guests, with an average of 3 nights per booking. The cancellation rate was 27.3%. The breakdown by room type was as follows: \n- Beach Villa: 5 bookings, revenue of ₹1,50,000\n- Sea View: 3 bookings, revenue of ₹49,000\n- Garden View: 3 bookings, revenue of ₹45,000"
         },
         {
           "chat": "Sales check",
           "question": "and this month so far?",
           "tools": [],
-          "first_s": 5.7,
-          "total_s": 23.7,
+          "first_s": 5.9,
+          "total_s": 24.1,
           "error": false,
-          "answer": "This month's sales so far at Seaside Retreat were ₹50,000. There were 5 guests, with a cancellation rate of 0%. The breakdown by room type is as follows:\n- Garden View rooms had 2 bookings for a revenue of ₹15,000.\n- Beach Villa rooms had 1 booking for a revenue of ₹20,000.\n- Sea View rooms had 2 bookings for a revenue of ₹15,000."
+          "answer": "This month's sales at Seaside Retreat have amounted to ₹1,20,000. There were 10 guests, with an average of 2 nights per booking. The cancellation rate was 17.3%. The breakdown by room type was as follows: \n- Beach Villa: 4 bookings, revenue of ₹80,000\n- Sea View: 2 bookings, revenue of ₹30,000\n- Garden View: 4 bookings, revenue of ₹10,000"
         },
         {
           "chat": "Sales check",
           "question": "how many bookings were cancelled last month?",
           "tools": [],
-          "first_s": 6.1,
-          "total_s": 7.3,
+          "first_s": 5.7,
+          "total_s": 6.8,
           "error": false,
           "answer": "I don't have that information."
         },
@@ -212,8 +212,8 @@
           "tools": [
             "list_bookings"
           ],
-          "first_s": 4.1,
-          "total_s": 4.1,
+          "first_s": 3.9,
+          "total_s": 3.9,
           "error": false,
           "answer": "3 bookings found:\n• #46 · Beach Villa · 30 → 31 Oct (1 night) · 2 guests · ₹15,000 · cancelled\n• #48 · Beach Villa · 20 → 24 Oct (4 nights) · 2 guests · ₹60,000 · cancelled\n• #36 · Sea View · 14 → 15 Oct (1 night) · 2 guests · ₹7,000 · cancelled"
         },
@@ -221,8 +221,8 @@
           "chat": "Bookings",
           "question": "which guest made booking 46?",
           "tools": [],
-          "first_s": 2.1,
-          "total_s": 3.2,
+          "first_s": 2.2,
+          "total_s": 3.3,
           "error": false,
           "answer": "I don't have that information."
         },
@@ -232,8 +232,8 @@
           "tools": [
             "list_bookings"
           ],
-          "first_s": 9.4,
-          "total_s": 9.4,
+          "first_s": 9.2,
+          "total_s": 9.2,
           "error": false,
           "answer": "8 bookings found:\n• #33 · Garden View · 19 → 20 Dec (1 night) · 2 guests · ₹4,500 · confirmed\n• #28 · Garden View · 13 → 17 Dec (4 nights) · 2 guests · ₹18,000 · confirmed\n• #29 · Beach Villa · 6 → 10 Dec (4 nights) · 2 guests · ₹60,000 · confirmed\n• #49 · Beach Villa · 5 → 6 Dec (1 night) · 3 guests · ₹15,000 · confirmed\n• #32 · Garden View · 4 → 9 Dec (5 nights) · 1 guests · ₹22,500 · confirmed\n• #47 · Garden View · 24 → 25 Nov (1 night) · 1 guests · ₹4,500 · confirmed\n• #34 · Garden View · 24 → 26 Nov (2 nights) · 1 guests · ₹9,000 · confirmed\n• #27 · Beach Villa · 21 → 22 Nov (1 night) · 2 guests · ₹15,000 · confirmed"
         },
@@ -243,8 +243,8 @@
           "tools": [
             "get_occupancy"
           ],
-          "first_s": 9.4,
-          "total_s": 12.1,
+          "first_s": 9.1,
+          "total_s": 11.3,
           "error": false,
           "answer": "Currently, there are 2 guests checked in at Seaside Retreat."
         },
@@ -252,8 +252,8 @@
           "chat": "Today's operations",
           "question": "any arrivals or departures today?",
           "tools": [],
-          "first_s": 2.2,
-          "total_s": 4.6,
+          "first_s": 1.9,
+          "total_s": 4.2,
           "error": false,
           "answer": "Today, there are no arrivals or departures scheduled at Seaside Retreat."
         },
@@ -263,8 +263,8 @@
           "tools": [
             "check_room_availability"
           ],
-          "first_s": 19.9,
-          "total_s": 31.1,
+          "first_s": 17.4,
+          "total_s": 27.2,
           "error": false,
           "answer": "Tomorrow, there are 44 rooms available for check-in, with 24 Garden View rooms at ₹4500 per night, 15 Sea View rooms at ₹7000 per night, and 5 Beach Villa rooms at ₹15000 per night."
         },
@@ -274,10 +274,10 @@
           "tools": [
             "check_room_availability"
           ],
-          "first_s": 23.1,
-          "total_s": 31.9,
+          "first_s": 21.0,
+          "total_s": 29.7,
           "error": false,
-          "answer": "There are 15 Sea View rooms available for check-in on Saturday, 2026-11-27, with each room costing ₹7000 per night. All Sea View rooms are free this weekend."
+          "answer": "There are 15 Sea View rooms available for check-in on Saturday, 2026-11-27, with each room costing ₹7000 per night. No rooms are booked for this stay."
         },
         {
           "chat": "Hotel info",
@@ -285,8 +285,8 @@
           "tools": [
             "get_hotel_info"
           ],
-          "first_s": 8.2,
-          "total_s": 10.2,
+          "first_s": 7.7,
+          "total_s": 9.9,
           "error": false,
           "answer": "Check-out time is at 10:00."
         },
@@ -294,8 +294,8 @@
           "chat": "Hotel info",
           "question": "can guests bring a dog?",
           "tools": [],
-          "first_s": 1.8,
-          "total_s": 4.8,
+          "first_s": 1.7,
+          "total_s": 4.1,
           "error": false,
           "answer": "Yes, guests are allowed to bring a dog according to the hotel policies."
         },
@@ -303,8 +303,8 @@
           "chat": "Hotel info",
           "question": "do we have a gym?",
           "tools": [],
-          "first_s": 2.6,
-          "total_s": 3.7,
+          "first_s": 2.3,
+          "total_s": 3.4,
           "error": false,
           "answer": "I don't have that information."
         },
@@ -312,10 +312,10 @@
           "chat": "Hotel info",
           "question": "what's the weather in Goa today?",
           "tools": [],
-          "first_s": 2.0,
-          "total_s": 5.7,
+          "first_s": 1.8,
+          "total_s": 4.8,
           "error": false,
-          "answer": "I don't have weather information. Please check a weather forecasting service for today's weather in Goa."
+          "answer": "I don't have weather information. Please check a weather service for the current weather in Goa."
         }
       ]
     }
