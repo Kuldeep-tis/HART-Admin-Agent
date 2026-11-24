@@ -68,7 +68,8 @@ def build_questions():
     free = availability["total_available_rooms"]
     free_per_type = [str(r["available_rooms"]) for r in availability["room_types"]]
     occ = booking_tools.get_occupancy(HOTEL_ID)
-    month = booking_tools.get_booking_summary(HOTEL_ID, today.replace(day=1).isoformat(), today.isoformat())
+    month = booking_tools.get_booking_summary(
+        HOTEL_ID, start_date=today.replace(day=1).isoformat(), end_date=today.isoformat())
     cancelled = booking_tools.list_bookings(HOTEL_ID, status="cancelled")["bookings"]
     prices = [number(r["price_per_night"]) for r in rooms]
 
