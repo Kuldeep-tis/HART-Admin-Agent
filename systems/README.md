@@ -20,7 +20,7 @@ The app runs in a Python virtual environment (venv), and Ollama is installed dir
 
 | | Linux | macOS | Windows |
 |---|---|---|---|
-| Git + Python 3.10+ | `sudo apt install git python3 python3-venv` | `xcode-select --install` (Git) and Python from python.org or `brew install python` | git-scm.com and python.org |
+| Git + Python 3.10+ | `sudo apt install git python3 python3-venv` (Ubuntu 20.04 has Python 3.8, which is too old: `sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt install python3.11 python3.11-venv`, then use `python3.11 -m venv .venv`) | `xcode-select --install` (Git) and Python from python.org or `brew install python` | git-scm.com and python.org |
 | Ollama | `curl -fsSL https://ollama.com/install.sh \| sh` | Download the app from ollama.com | Download the installer from ollama.com |
 
 Then download the model (about 2 GB):
@@ -59,8 +59,13 @@ With the same files on every computer, the test is fair: same data, same agent, 
 ## 2. Run the test
 
 1. Plug in the charger (laptops on battery are slower).
-2. Close the browser and other heavy apps.
-3. Run:
+2. Set the power mode to **Performance**. Power Saver made the 8 GB laptop about **3× slower** (first words 10.7 s instead of 4.4 s):
+   - Ubuntu 22.04+: Settings → Power → Power Mode → Performance, or `powerprofilesctl set performance`
+   - Ubuntu 20.04: no menu for it; keep the charger plugged in
+   - Windows: Settings → System → Power → Power mode → Best performance
+   - Mac: System Settings → Battery → Low Power Mode → Never
+3. Close the browser and other heavy apps.
+4. Run:
 
 ```bash
 python scripts/system_benchmark.py --name office-mac     # pick a short name for this computer
@@ -93,6 +98,7 @@ On the main machine, run `git pull`, then `python scripts/system_benchmark.py --
 
 | Measure | Meaning |
 |---|---|
+| **Power mode** | Performance, balanced or power-saver. The test warns if Power Saver or battery is on |
 | **Free RAM at start** | Memory the model can use. Too little means swapping, and everything gets slow |
 | **Model runs on** | CPU only, or GPU (Apple chip / NVIDIA) |
 | **Cold load** | Seconds to load the model from disk into memory (only after a restart) |

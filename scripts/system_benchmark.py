@@ -43,6 +43,7 @@ sys.path.insert(0, str(ROOT))
 
 import benchmark_models as bm  # noqa: E402  (same folder: the 9 questions and their checks)
 from chat_test import SCENARIOS  # noqa: E402  (the 4 multi-turn staff chats)
+from helpers.power import power_mode, power_source, speed_warnings  # noqa: E402
 
 GOAL_FIRST_WORDS_S = 5.0   # project goal: first words in under 5 seconds
 
@@ -170,21 +171,6 @@ def gpus():
     return []
 
 
-def power():
-    """Laptops on battery run much slower, so record it."""
-    system = platform.system()
-    if system == "Linux":
-        supplies = Path("/sys/class/power_supply")
-        for online in supplies.glob("*/online") if supplies.exists() else []:
-            if (online.parent / "type").read_text().strip() == "Mains":
-                return "charger" if online.read_text().strip() == "1" else "battery"
-        return "desktop (no battery)"
-    if system == "Darwin":
-        text = run_cmd("pmset", "-g", "batt")
-        return "charger" if "AC Power" in text else "battery" if "Battery Power" in text else "unknown"
-    return "unknown"
-
-
 def os_name():
     system = platform.system()
     if system == "Linux":
@@ -207,7 +193,8 @@ def collect_system(url):
         ollama = "not reachable"
     return {"hostname": socket.gethostname(), "machine": machine_name(), **cpu(), "gpus": gpus(),
             **memory(), "disk_total_gb": gb(disk.total), "disk_free_gb": gb(disk.free),
-            "power": power(), "os": os_name(), "python": platform.python_version(), "ollama": ollama}
+            "power": power_source(), "power_mode": power_mode(), "os": os_name(),
+            "python": platform.python_version(), "ollama": ollama}
 
 
 # ---------------------------------------------------------------- measurements
@@ -388,6 +375,7 @@ def write_report(result, path):
         f"| Swap | {s.get('swap_total_gb', '–')} GB ({s.get('swap_used_gb', '–')} GB in use at start) |",
         f"| Disk | {s['disk_total_gb']} GB ({s['disk_free_gb']} GB free) |",
         f"| Power | {s['power']} |",
+        f"| **Power mode** | **{s.get('power_mode', 'not recorded')}** |",
         f"| OS | {s['os']} |",
         f"| Python | {s['python']} |",
         f"| Ollama | {s['ollama']} |",
@@ -466,7 +454,7 @@ def write_comparison():
         goal = "✅" if sm["avg_first_s"] <= GOAL_FIRST_WORDS_S and all_right else "❌"
         lines.append(
             f"| {i} | {result['name']}<br>{s['machine']} | {s['cpu']} | {s.get('ram_total_gb')} GB"
-            f" ({s.get('ram_free_gb')} GB) | {m['runs_on']} | {s['power']} | {m['model']} |"
+            f" ({s.get('ram_free_gb')} GB) | {m['runs_on']} | {s['power']}<br>{s.get('power_mode', '–')} | {m['model']} |"
             f" {sm['right_answer']}/{sm['n_questions']} | {secs(raw['cold_load_s'])} |"
             f" {raw['read_tokens_per_s']} | {raw['write_tokens_per_s']} | **{secs(sm['avg_first_s'])}** |"
             f" {secs(sm['avg_total_s'])} | {secs(sm.get('chat_avg_first_s'))} | {secs(sm.get('chat_avg_total_s'))} |"
@@ -479,7 +467,7 @@ def write_comparison():
         " the prompt, tools and chat history first). **Write tok/s** decides how fast the answer appears.",
         "- **Free RAM at start** matters: if the model doesn't fit in free RAM, the computer swaps and"
         " everything gets slower. Close the browser and other heavy apps before testing.",
-        "- **Power**: laptops on battery are often much slower than on the charger.",
+        "- **Power**: laptops on battery or in Power Saver mode are much slower (Power Saver made the 8 GB laptop 3× slower).",
         "- **Model runs on**: Macs with Apple chips and PCs with an NVIDIA card run the model on the GPU,"
         " which is usually several times faster than CPU only.",
     ]
@@ -525,7 +513,9 @@ def main():
     system = collect_system(url)   # before loading any model, so "free RAM" means free for the model
     name = args.name or system["hostname"]
     print(f"Computer: {system['machine']} | {system['cpu']} | RAM {system.get('ram_total_gb')} GB"
-          f" ({system.get('ram_free_gb')} GB free) | {system['power']}")
+          f" ({system.get('ram_free_gb')} GB free) | {system['power']} | power mode: {system['power_mode']}")
+    for warning in speed_warnings(system["power_mode"], system["power"]):
+        print(f"⚠ {warning} The results will not show this computer's real speed.")
     if system.get("ram_free_gb") is not None and system["ram_free_gb"] < 3:
         print("⚠ Less than 3 GB RAM free: close the browser and other heavy apps for a fair result.")
 

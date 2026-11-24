@@ -4,7 +4,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from apps.admin.routes import admin_bp
 from config import Config
-from helpers import cli, database, logger, security
+from helpers import cli, database, logger, power, security
 
 
 def create_app(config_overrides=None):
@@ -22,6 +22,10 @@ def create_app(config_overrides=None):
     logger.init_app(app)
     if app.config.get("SECRET_KEY_IS_TEMPORARY"):
         app.logger.warning("SECRET_KEY is not set: using a temporary key, so logins reset on every restart.")
+    if app.config.get("LLM_PROVIDER") == "local":
+        # The local model runs on this computer's CPU: Power Saver / battery make replies ~3x slower.
+        for warning in power.speed_warnings():
+            app.logger.warning(warning)
     if app.config.get("TRUST_PROXY"):
         # Behind nginx / a load balancer: trust X-Forwarded-For/Proto for the real client IP and https.
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
