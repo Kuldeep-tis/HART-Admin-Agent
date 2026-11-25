@@ -20,7 +20,8 @@
     "power": "charger",
     "os": "Ubuntu 24.04.5 LTS (kernel 7.0.0-43-generic)",
     "python": "3.12.3",
-    "ollama": "0.40.16"
+    "ollama": "0.40.16",
+    "power_mode": "power-saver"
   },
   "models": [
     {
