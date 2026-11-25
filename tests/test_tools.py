@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from apps.core import tools
-from apps.core.tools.registry import resolve_period
+from apps.core.tools.registry import period_in, resolve_period, steer_period
 
 TODAY = date.today()
 
@@ -61,8 +61,15 @@ def test_bad_arguments_return_an_error_instead_of_crashing(app, name, args, mess
     assert message in run(app, name, **args)["error"]
 
 
-def test_unexpected_arguments_are_dropped(app):
-    result = run(app, "get_policies", sql="DROP TABLE bookings", hotel_id=1)
+def test_unknown_arguments_are_an_error_not_silently_dropped(app):
+    # Dropping them silently made the AI believe it had filtered (e.g. "id": 3 -> newest bookings).
+    result = run(app, "list_bookings", id="3")
+    assert "has no argument id" in result["error"] and "booking_id" in result["error"]
+    assert "has no argument sql" in run(app, "get_policies", sql="DROP TABLE bookings")["error"]
+
+
+def test_hotel_id_from_the_ai_is_silently_ignored(app):
+    result = run(app, "get_policies", hotel_id=1)   # security: we always use our own hotel_id
     assert "policies" in result
 
 
@@ -88,9 +95,54 @@ def test_period_gives_the_same_summary_as_explicit_dates(app):
     assert by_period == by_dates and by_period["start_date"] == start.isoformat()
 
 
-def test_period_wins_over_wrong_dates_from_the_model(app):
-    result = run(app, "get_booking_summary", period="this_month", start_date="2026-01-01", end_date="2026-01-31")
-    assert result["start_date"] == TODAY.replace(day=1).isoformat()
+@pytest.mark.parametrize("name", ["get_booking_summary", "list_bookings"])
+def test_period_and_dates_together_is_an_error(app, name):
+    # "this_month" + end date 30 Dec: silently picking one gave wrong answers, so the AI must choose.
+    result = run(app, name, period="this_month", end_date=(TODAY + timedelta(days=36)).isoformat())
+    assert "either period or start_date/end_date" in result["error"] and "next_30_days" in result["error"]   # tells the AI how to retry
+
+
+def test_upcoming_bookings_for_the_next_30_days(app, hotel_db):
+    result = run(app, "list_bookings", status="confirmed", period="next_30_days", limit=20)
+    end = (TODAY + timedelta(days=29)).isoformat()
+    expected = {r[0] for r in hotel_db.execute(
+        "SELECT id FROM bookings WHERE hotel_id = 2 AND status = 'confirmed'"
+        " AND check_in_date BETWEEN ? AND ?", (TODAY.isoformat(), end))}
+    assert {b["booking_id"] for b in result["bookings"]} == expected
+    assert all(TODAY.isoformat() <= b["check_in_date"] <= end for b in result["bookings"])
+
+
+# ---------- one booking by its number ----------
+
+def test_one_booking_by_id(app, hotel_db):
+    own = hotel_db.execute("SELECT id FROM bookings WHERE hotel_id = 2 ORDER BY id LIMIT 1").fetchone()[0]
+    for value in (own, str(own), f"#{own}"):
+        result = run(app, "list_bookings", booking_id=value, status="confirmed")  # other filters don't hide it
+        assert [b["booking_id"] for b in result["bookings"]] == [own]
+    assert f"#{own} ·" in tools.render("list_bookings", result)
+
+
+def test_another_hotels_booking_is_not_found(app, hotel_db):
+    other = hotel_db.execute("SELECT id FROM bookings WHERE hotel_id = 1 LIMIT 1").fetchone()[0]
+    result = run(app, "list_bookings", booking_id=other)
+    assert result["bookings"] == []
+    assert tools.render("list_bookings", result) == f"Booking #{other} was not found."
+
+
+def test_bad_booking_id_is_an_error(app):
+    assert "booking_id must be a booking number" in run(app, "list_bookings", booking_id="abc")["error"]
+
+
+# ---------- availability for one room type ----------
+
+def test_availability_for_one_room_type(app):
+    day = TODAY.isoformat()
+    for asked in ("sea view", "Sea View rooms", "sea-view room"):
+        result = run(app, "check_room_availability", check_in=day, room_type=asked)
+        assert [r["room_type"] for r in result["room_types"]] == ["Sea View"]
+        assert result["total_available_rooms"] == result["room_types"][0]["available_rooms"]
+    error = run(app, "check_room_availability", check_in=day, room_type="Heritage Suite")["error"]
+    assert "No room type" in error and "Sea View" in error   # another hotel's room type is unknown here
 
 
 def test_summary_without_dates_means_this_month_so_far(app):
@@ -140,3 +192,27 @@ def test_stay_dates_are_short(check_in, check_out, expected, monkeypatch):
     from apps.core.tools import booking_tools
     monkeypatch.setattr(booking_tools, "_today", lambda: date(2026, 11, 23))
     assert booking_tools._stay(date.fromisoformat(check_in), date.fromisoformat(check_out)) == expected
+
+
+# ---------- the period the staff member named ----------
+
+@pytest.mark.parametrize("question, period", [
+    ("and last month?", "last_month"),
+    ("What were LAST MONTH's sales", "last_month"),
+    ("revenue this month so far", "this_month"),
+    ("upcoming confirmed bookings for the next 30 days", "next_30_days"),
+    ("bookings in the last 30 days", "last_30_days"),    # not also "30 days" or "last month"
+    ("any arrivals today?", "today"),
+    ("compare this month and last month", None),        # two periods: the AI decides
+    ("how many rooms are free?", None),
+])
+def test_period_in_question(question, period):
+    assert period_in(question) == period
+
+
+def test_steer_period_only_touches_tools_with_a_period():
+    wrong = {"period": "this_month", "end_date": "2026-11-24", "status": "cancelled"}
+    assert steer_period("list_bookings", wrong, "and last month?") == {"period": "last_month", "status": "cancelled"}
+    assert steer_period("list_bookings", wrong, "show cancelled ones") == wrong        # no period named
+    availability = {"check_in": "2026-11-24"}
+    assert steer_period("check_room_availability", availability, "rooms free today?") == availability

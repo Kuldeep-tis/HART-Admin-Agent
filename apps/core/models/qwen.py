@@ -36,6 +36,14 @@ MAX_TOOL_ROUNDS = 5      # safety limit on tool-call round trips per answer
 DEFAULT_NUM_CTX = 4096   # the model's working memory in tokens (see OLLAMA_NUM_CTX)
 LIST_ROW = "\n• #"       # a row of a Python-written booking list (booking_tools._render_bookings)
 
+# Guard against made-up facts: every number staff ask about (times, prices, counts, revenue)
+# lives in the database. So a reply with a number but no tool call is retried once with this hint.
+HAS_NUMBER = re.compile(r"\d")
+LOOKUP_HINT = ("\n\n(Look this up with the right tool now and answer only from its result. "
+               "If no tool has it, say you don't have that information.)")
+NO_LOOKUP_REPLY = ("I couldn't look that up. Please ask the full question, "
+                   "for example \"What was the revenue last month?\"")
+
 
 class QwenError(Exception):
     """A problem we can show to the user as-is."""
@@ -209,13 +217,21 @@ def stream_answer(*, system_prompt, history, message, hotel_id, url, model, time
     SECURITY: hotel_id comes from our code (the agent's row), never from the model.
     """
     messages = build_messages(system_prompt, history, message)
+    question_at = len(messages) - 1   # the staff member's question (tool messages get added after it)
     tool_log, input_tokens, output_tokens = [], 0, 0
+    guard_used = False   # the "numbers without a lookup" retry happens at most once per answer
 
     for _ in range(MAX_TOOL_ROUNDS + 1):
-        content, calls = "", []
-        for chunk in _chat_stream(url, model, messages, timeout, keep_alive, num_ctx):
+        content, calls, unchecked = "", [], False
+        # Numbers are only trusted after a lookup that worked (a failed lookup gives no facts).
+        looked_up = any("error" not in c["result"] for c in tool_log)
+        stream = _chat_stream(url, model, messages, timeout, keep_alive, num_ctx)
+        for chunk in stream:
             piece = (chunk.get("message") or {}).get("content") or ""
             if piece:
+                if not looked_up and HAS_NUMBER.search(content + piece):
+                    unchecked = True   # a number, and nothing was looked up: probably copied or invented
+                    break
                 content += piece
                 yield {"type": "token", "text": piece}
             calls += (chunk.get("message") or {}).get("tool_calls") or []
@@ -226,6 +242,24 @@ def stream_answer(*, system_prompt, history, message, hotel_id, url, model, time
                     logger.warning("Input (%s tokens) is close to num_ctx=%s: the start may be cut off. "
                                    "Lower OLLAMA_MAX_HISTORY or raise OLLAMA_NUM_CTX.",
                                    chunk.get("prompt_eval_count"), num_ctx)
+
+        if unchecked:
+            # Follow-ups like "and last month?" made the model copy the previous answer's style and
+            # make up numbers without calling a tool. Stop it at the first digit (closing the stream
+            # tells Ollama to stop writing), clear the screen, and ask again with a nudge.
+            stream.close()
+            yield {"type": "reset"}
+            if guard_used:   # asked twice, still no lookup: say so rather than show a made-up number
+                logger.warning("Answer still had numbers without a lookup; refusing to guess")
+                content = NO_LOOKUP_REPLY
+                yield {"type": "token", "text": content}
+                break
+            guard_used = True
+            logger.info("Answer had numbers without a lookup; asking again with a tool hint")
+            # Start again from the question (without failed lookups), plus the hint.
+            del messages[question_at:]
+            messages.append({"role": "user", "content": message + LOOKUP_HINT})
+            continue
 
         if not calls:
             break  # Qwen answered with text
@@ -246,6 +280,8 @@ def stream_answer(*, system_prompt, history, message, hotel_id, url, model, time
                     args = json.loads(args)
                 except ValueError:
                     args = {}
+            if len(calls) == 1:   # several calls = a deliberate comparison ("this vs last month"): leave them
+                args = tools.steer_period(name, args, message)   # the period the staff member named, not a guess
             yield {"type": "tool", "name": name}
             result = tools.execute(name, args, hotel_id=hotel_id)  # hotel_id from US, not the AI
             tool_log.append({"name": name, "args": args, "result": result})

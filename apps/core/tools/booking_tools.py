@@ -3,8 +3,8 @@
 from datetime import date, timedelta
 
 from apps.core.services import booking_service
-from apps.core.tools.registry import (PERIOD, ToolInputError, check_range, date_range, parse_date,
-                                      resolve_period, tool)
+from apps.core.tools.registry import (PERIOD, ToolInputError, check_period_or_dates, check_range, date_range,
+                                      parse_date, resolve_period, tool)
 
 DATE = {"type": "string", "description": "YYYY-MM-DD"}
 STATUSES = ["confirmed", "checked_in", "checked_out", "cancelled"]
@@ -20,15 +20,25 @@ STATUSES = ["confirmed", "checked_in", "checked_out", "cancelled"]
     ),
     parameters={
         "type": "object",
-        "properties": {"check_in": DATE, "check_out": DATE},
+        "properties": {
+            "check_in": DATE, "check_out": DATE,
+            "room_type": {"type": "string", "description": "Optional: only this room type, e.g. 'sea view'"},
+        },
         "required": ["check_in"],
     },
 )
-def check_room_availability(hotel_id, check_in=None, check_out=None):
+def check_room_availability(hotel_id, check_in=None, check_out=None, room_type=None):
     start = parse_date(check_in, field="check_in")
     end = parse_date(check_out, default=start + timedelta(days=1), field="check_out")
     check_range(start, end, "check_in", "check_out", allow_equal=False)
     rooms = booking_service.room_availability(hotel_id, start.isoformat(), end.isoformat())
+    if room_type:
+        wanted = _norm(room_type)
+        matches = [r for r in rooms if wanted in _norm(r["room_type"])]
+        if not matches:
+            raise ToolInputError(f"No room type '{room_type}'. Room types: "
+                                 + ", ".join(r["room_type"] for r in rooms) + ".")
+        rooms = matches
     return {
         "check_in": start.isoformat(), "check_out": end.isoformat(),
         "total_available_rooms": sum(r["available_rooms"] for r in rooms),
@@ -104,6 +114,8 @@ def _booking_view(b):
 def _render_bookings(result):
     """list_bookings result -> the finished answer as plain text (stored, and shown in the transcript)."""
     if not result["bookings"]:
+        if result.get("booking_id"):
+            return f"Booking #{result['booking_id']} was not found."
         return "No bookings match that."
     lines = [_bookings_title(result) + ":"]
     for v in map(_booking_view, result["bookings"]):
@@ -127,11 +139,13 @@ def _table_bookings(result):
     progress="Finding bookings…",
     description=(
         "List bookings (id, room type, dates, guests, amount, status), newest first. "
-        "Filters: status, and check-in period or date range. No guest names."
+        "Filters: booking_id (one booking by its number), status, and check-in period or date range. "
+        "Upcoming bookings: period next_7_days or next_30_days. No guest names."
     ),
     parameters={
         "type": "object",
         "properties": {
+            "booking_id": {"type": "integer", "description": "One booking by its number, e.g. 46"},
             "status": {"type": "string", "enum": STATUSES},
             "period": PERIOD,
             "start_date": DATE,
@@ -142,7 +156,13 @@ def _table_bookings(result):
     render=_render_bookings,
     table=_table_bookings,
 )
-def list_bookings(hotel_id, status=None, period=None, start_date=None, end_date=None, limit=10):
+def list_bookings(hotel_id, booking_id=None, status=None, period=None, start_date=None, end_date=None, limit=10):
+    if booking_id is not None:
+        # One booking: other filters would only hide it. hotel_id still applies (isolation).
+        number = _booking_number(booking_id)
+        result = booking_service.list_bookings(hotel_id, booking_id=number, limit=1)
+        return {**result, "booking_id": number}
+    check_period_or_dates(period, start_date, end_date)
     if status and status not in STATUSES:
         raise ToolInputError(f"status must be one of {', '.join(STATUSES)}.")
     if period:
@@ -162,6 +182,23 @@ def list_bookings(hotel_id, status=None, period=None, start_date=None, end_date=
         end_date=end.isoformat() if end else None,
         limit=limit,
     )
+
+
+def _booking_number(value):
+    """46, "46" or "#46" -> 46."""
+    try:
+        number = int(str(value).strip().lstrip("#"))
+    except ValueError:
+        raise ToolInputError(f"booking_id must be a booking number like 46, got '{value}'.") from None
+    if number < 1:
+        raise ToolInputError("booking_id must be a positive number.")
+    return number
+
+
+def _norm(text):
+    """'Sea-View rooms' -> 'seaview': room-type matching ignores case, spaces and dashes."""
+    text = str(text).lower().replace("-", "").replace(" ", "")
+    return text[:-5] if text.endswith("rooms") else text[:-4] if text.endswith("room") else text
 
 
 def _today():

@@ -7,6 +7,7 @@ SECURITY: hotel_id is NOT a tool argument. execute() always passes the agent's
 own hotel_id, so the AI cannot read another hotel's data.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Callable
@@ -83,7 +84,14 @@ def execute(name, args, hotel_id):
     if t is None:
         return {"error": f"Unknown tool '{name}'."}
     allowed = set(t.parameters.get("properties", {}))
-    clean = {k: v for k, v in (args or {}).items() if k in allowed and v not in (None, "")}
+    clean = {k: v for k, v in (args or {}).items() if v not in (None, "")}
+    clean.pop("hotel_id", None)   # SECURITY: never from the AI. Dropped silently; we pass our own below.
+    unknown = sorted(set(clean) - allowed)
+    if unknown:
+        # Don't silently drop it: the AI would think it filtered (e.g. by booking id) when it didn't.
+        # The error goes back to the AI, which retries with the right arguments.
+        return {"error": f"{name} has no argument {', '.join(unknown)}. "
+                         f"Allowed: {', '.join(sorted(allowed)) or 'none'}."}
     try:
         result = t.fn(hotel_id, **clean)
     except ToolInputError as exc:
@@ -111,8 +119,45 @@ PERIODS = ["today", "yesterday", "this_week", "last_week", "this_month", "last_m
            "this_year", "last_7_days", "last_30_days", "next_7_days", "next_30_days"]
 PERIOD = {
     "type": "string", "enum": PERIODS,
-    "description": "Use instead of dates when it fits. this_week/this_month/this_year end today.",
+    "description": "Use instead of dates when it fits. this_week/this_month/this_year end today. "
+                   "next_7_days/next_30_days start today (upcoming).",
 }
+
+
+# Period words in the staff member's question -> our period names. Longest phrases first.
+PERIOD_PHRASES = [
+    (r"(?:last|past|previous) 30 days", "last_30_days"), (r"(?:last|past|previous) 7 days", "last_7_days"),
+    (r"next 30 days|next month|coming month", "next_30_days"), (r"next 7 days|next week|coming week", "next_7_days"),
+    (r"(?:last|previous) month", "last_month"), (r"this month", "this_month"),
+    (r"(?:last|previous) week", "last_week"), (r"this week", "this_week"),
+    (r"this year", "this_year"), (r"yesterday", "yesterday"), (r"today", "today"),
+]
+
+
+def period_in(text):
+    """The one period a question names ("and last month?" -> "last_month"), else None.
+    None also when it names two ("this month vs last month"): then the AI must decide."""
+    text, found = (text or "").lower(), set()
+    for pattern, period in PERIOD_PHRASES:
+        if re.search(rf"\b(?:{pattern})\b", text):
+            found.add(period)
+            text = re.sub(rf"\b(?:{pattern})\b", " ", text)   # "last 30 days" is not also "30 days"
+    return found.pop() if len(found) == 1 else None
+
+
+def steer_period(name, args, question):
+    """Use the period the staff member actually named, instead of the AI's guess.
+
+    A small model answering a follow-up ("and last month?") copies the earlier call
+    (period=this_month, plus an end date). Python reads the question, so the dates are right.
+    Only for tools that take a period, and only when the question names exactly one.
+    """
+    t = TOOLS.get(name)
+    wanted = period_in(question)
+    if t is None or wanted is None or "period" not in t.parameters.get("properties", {}):
+        return args
+    args = {k: v for k, v in (args or {}).items() if k not in ("start_date", "end_date")}
+    return {**args, "period": wanted}
 
 
 def resolve_period(period, today=None):
@@ -139,8 +184,17 @@ def resolve_period(period, today=None):
     return ranges[period]
 
 
+def check_period_or_dates(period, start_date, end_date):
+    """Both a period and dates is ambiguous ("this_month" + end 30 Dec: which one?). Picking one
+    silently gave wrong answers, so the AI is told to choose and retries."""
+    if period and (start_date or end_date):
+        raise ToolInputError("Send either period or start_date/end_date, not both. Call the tool again "
+                             "with only a period (e.g. last_month, this_month, next_30_days) or only dates.")
+
+
 def date_range(period, start_date, end_date, default_period=None):
-    """The (start, end) dates a tool should use: a named period wins over explicit dates."""
+    """The (start, end) dates a tool should use: a named period, or explicit dates."""
+    check_period_or_dates(period, start_date, end_date)
     if period:
         return resolve_period(period)
     if start_date or end_date or default_period is None:

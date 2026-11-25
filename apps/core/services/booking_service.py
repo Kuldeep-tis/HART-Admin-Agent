@@ -102,7 +102,7 @@ def booking_summary(hotel_id, start_date, end_date):
     return result
 
 
-def list_bookings(hotel_id, status=None, start_date=None, end_date=None, limit=10):
+def list_bookings(hotel_id, status=None, start_date=None, end_date=None, limit=10, booking_id=None):
     """Individual bookings WITHOUT personal data (no guest name, email or phone)."""
     sql = (
         "SELECT b.id AS booking_id, rt.name AS room_type, b.check_in_date, b.check_out_date,"
@@ -112,6 +112,9 @@ def list_bookings(hotel_id, status=None, start_date=None, end_date=None, limit=1
         " WHERE b.hotel_id = ?"
     )
     params = [hotel_id]
+    if booking_id is not None:   # still inside this hotel: another hotel's booking is "not found"
+        sql += " AND b.id = ?"
+        params.append(booking_id)
     if status:
         sql += " AND b.status = ?"
         params.append(status)

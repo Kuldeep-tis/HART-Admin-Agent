@@ -366,3 +366,76 @@ def test_old_lists_are_not_copied_from_history():
     assert sent[1]["content"].startswith("3 bookings found:") and "#46" not in sent[1]["content"]
     normal = qwen.build_messages("sys", [{"role": "assistant", "content": "Check-in is 14:00."}], "x")
     assert normal[1]["content"] == "Check-in is 14:00."   # other answers are kept as they are
+
+
+# ---------- guard: numbers without a lookup ----------
+
+def test_numbers_without_a_lookup_are_stopped_and_asked_again(app, ollama):
+    # "and last month?" -> the model copies the old answer's style and invents a revenue figure.
+    ollama.replies = [words("Revenue last month was ", "₹1,20,000."),
+                      tool_request("get_booking_summary", {"period": "last_month"}),
+                      words("Last month's revenue was ₹2,44,000.")]
+    with app.app_context():
+        events = list(qwen.stream_answer(system_prompt="s", history=[], message="and last month?",
+                                         hotel_id=2, url="u", model="m", timeout=5))
+    shown = [e["text"] for e in events if e["type"] == "token"]
+    assert "₹1,20,000." not in shown                           # stopped at the first digit
+    assert [e["type"] for e in events].index("reset") < [e["type"] for e in events].index("tool")
+    retry = ollama.payloads[1]["messages"][1]        # [system, user, ...]: the question, now with a hint
+    assert retry["role"] == "user" and retry["content"].startswith("and last month?")
+    assert "right tool" in retry["content"]
+    reply = events[-1]["reply"]
+    assert reply.tool_calls[0]["name"] == "get_booking_summary" and "2,44,000" in reply.text
+
+
+def test_guard_retries_once_then_refuses_to_guess(app, ollama):
+    ollama.replies = [words("Check-out is 12:00."), words("Check-out is at 12 noon.")]
+    with app.app_context():
+        reply = ask(message="and check out?")
+    assert len(ollama.payloads) == 2                          # one retry, no endless loop
+    assert reply.text == qwen.NO_LOOKUP_REPLY and "12" not in reply.text
+
+
+def test_follow_up_uses_the_period_the_staff_member_named(app, ollama):
+    # Real qwen2.5:3b on "and last month": copies the earlier call (period=this_month + an end date).
+    ollama.replies = [tool_request("get_booking_summary", {"period": "this_month", "end_date": "2026-11-24"}),
+                      words("Done.")]
+    with app.app_context():
+        reply = ask(message="and last month?")
+    call = reply.tool_calls[0]
+    assert call["args"] == {"period": "last_month"}             # the log shows what really ran
+    assert "error" not in call["result"]
+
+
+def test_guard_ignores_answers_without_numbers_and_answers_after_a_lookup(app, ollama):
+    ollama.replies = [words("I don't have that information.")]
+    with app.app_context():
+        assert ask(message="do we have a gym?").text == "I don't have that information."
+    assert len(ollama.payloads) == 1
+    ollama.payloads.clear()
+    ollama.replies = [tool_request("get_hotel_info"), words("Check-out is at 10:00.")]
+    with app.app_context():
+        assert ask().text == "Check-out is at 10:00."
+    assert len(ollama.payloads) == 2                          # tool round + answer, no retry
+
+
+def test_two_lookups_comparing_periods_are_left_alone(app, ollama):
+    two_calls = [{"message": {"role": "assistant", "content": "", "tool_calls": [
+        {"function": {"name": "get_booking_summary", "arguments": {"period": "this_month"}}},
+        {"function": {"name": "get_booking_summary", "arguments": {"period": "last_month"}}}]}, "done": False},
+        {"message": {"role": "assistant", "content": ""}, "done": True, "prompt_eval_count": 50, "eval_count": 5}]
+    ollama.replies = [two_calls, words("Compared.")]
+    with app.app_context():
+        reply = ask(message="and last month?")
+    assert [c["args"]["period"] for c in reply.tool_calls] == ["this_month", "last_month"]
+
+
+def test_numbers_after_only_failed_lookups_are_not_trusted(app, ollama):
+    # Both lookups failed, then the model wrote "0 cancelled" anyway: that number came from nowhere.
+    ollama.replies = [tool_request("list_bookings", {"status": "deleted"}), words("There were 0 cancelled."),
+                      tool_request("list_bookings", {"status": "cancelled"})]
+    with app.app_context():
+        reply = ask(message="how many were cancelled?")
+    retry = ollama.payloads[2]["messages"]
+    assert retry[-1]["role"] == "user" and "right tool" in retry[-1]["content"]   # clean restart + hint
+    assert "error" not in reply.tool_calls[-1]["result"] and "#" in reply.text
