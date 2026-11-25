@@ -3,6 +3,7 @@
 A fake Ollama replaces the real HTTP call, so these tests need no model and run in seconds.
 """
 
+import copy
 import json
 
 import pytest
@@ -55,7 +56,7 @@ class FakeOllama:
         self.payloads = []
 
     def post(self, url, json=None, timeout=None, stream=False):
-        self.payloads.append(json)
+        self.payloads.append(copy.deepcopy(json))   # a snapshot: the code keeps adding to the same list
         reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
         if isinstance(reply, Exception):
             raise reply
